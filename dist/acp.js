@@ -11,6 +11,8 @@ import {
   authMethodSchema,
   authenticateRequestSchema,
   authenticateResponseSchema,
+  availableCommandInputSchema,
+  availableCommandSchema,
   blobResourceContentsSchema,
   cancelNotificationSchema,
   clientCapabilitiesSchema,
@@ -22,12 +24,22 @@ import {
   createTerminalResponseSchema,
   embeddedResourceResourceSchema,
   envVariableSchema,
+  extMethodRequest1Schema,
+  extMethodRequestSchema,
+  extMethodResponse1Schema,
+  extMethodResponseSchema,
+  extNotification1Schema,
+  extNotificationSchema,
   external_exports,
   fileSystemCapabilitySchema,
+  httpHeaderSchema,
   initializeRequestSchema,
   initializeResponseSchema,
+  killTerminalCommandRequestSchema,
+  killTerminalResponseSchema,
   loadSessionRequestSchema,
   loadSessionResponseSchema,
+  mcpCapabilitiesSchema,
   mcpServerSchema,
   newSessionRequestSchema,
   newSessionResponseSchema,
@@ -43,8 +55,13 @@ import {
   requestPermissionRequestSchema,
   requestPermissionResponseSchema,
   roleSchema,
-  sessionIdSchema,
+  sessionModeIdSchema,
+  sessionModeSchema,
+  sessionModeStateSchema,
   sessionNotificationSchema,
+  setSessionModeRequestSchema,
+  setSessionModeResponseSchema,
+  stdioSchema,
   terminalExitStatusSchema,
   terminalOutputRequestSchema,
   terminalOutputResponseSchema,
@@ -54,11 +71,68 @@ import {
   toolCallStatusSchema,
   toolCallUpdateSchema,
   toolKindSchema,
+  unstructuredCommandInputSchema,
   waitForTerminalExitRequestSchema,
   waitForTerminalExitResponseSchema,
   writeTextFileRequestSchema,
   writeTextFileResponseSchema
-} from "./chunk-5YSLOIKK.js";
+} from "./chunk-GOJNWGAH.js";
+
+// typescript/stream.ts
+function ndJsonStream(output, input) {
+  const textEncoder = new TextEncoder();
+  const textDecoder = new TextDecoder();
+  const readable = new ReadableStream({
+    async start(controller) {
+      let content = "";
+      const reader = input.getReader();
+      try {
+        while (true) {
+          const { value, done } = await reader.read();
+          if (done) {
+            break;
+          }
+          if (!value) {
+            continue;
+          }
+          content += textDecoder.decode(value, { stream: true });
+          const lines = content.split("\n");
+          content = lines.pop() || "";
+          for (const line of lines) {
+            const trimmedLine = line.trim();
+            if (trimmedLine) {
+              try {
+                const message = JSON.parse(trimmedLine);
+                controller.enqueue(message);
+              } catch (err) {
+                console.error(
+                  "Failed to parse JSON message:",
+                  trimmedLine,
+                  err
+                );
+              }
+            }
+          }
+        }
+      } finally {
+        reader.releaseLock();
+        controller.close();
+      }
+    }
+  });
+  const writable = new WritableStream({
+    async write(message) {
+      const content = JSON.stringify(message) + "\n";
+      const writer = output.getWriter();
+      try {
+        await writer.write(textEncoder.encode(content));
+      } finally {
+        writer.releaseLock();
+      }
+    }
+  });
+  return { readable, writable };
+}
 
 // typescript/acp.ts
 var AgentSideConnection = class {
@@ -70,14 +144,14 @@ var AgentSideConnection = class {
    * following the ACP specification.
    *
    * @param toAgent - A function that creates an Agent handler to process incoming client requests
-   * @param input - The stream for sending data to the client (typically stdout)
-   * @param output - The stream for receiving data from the client (typically stdin)
+   * @param stream - The bidirectional message stream for communication. Typically created using
+   *                 {@link ndJsonStream} for stdio-based connections.
    *
    * See protocol docs: [Communication Model](https://agentclientprotocol.com/protocol/overview#communication-model)
    */
-  constructor(toAgent, input, output) {
+  constructor(toAgent, stream) {
     const agent = toAgent(this);
-    const handler = async (method, params) => {
+    const requestHandler = async (method, params) => {
       switch (method) {
         case AGENT_METHODS.initialize: {
           const validatedParams = initializeRequestSchema.parse(params);
@@ -96,25 +170,64 @@ var AgentSideConnection = class {
             validatedParams
           );
         }
-        case AGENT_METHODS.authenticate: {
-          const validatedParams = authenticateRequestSchema.parse(params);
-          return agent.authenticate(
+        case AGENT_METHODS.session_set_mode: {
+          if (!agent.setSessionMode) {
+            throw RequestError.methodNotFound(method);
+          }
+          const validatedParams = setSessionModeRequestSchema.parse(params);
+          const result = await agent.setSessionMode(
             validatedParams
           );
+          return result ?? {};
+        }
+        case AGENT_METHODS.authenticate: {
+          const validatedParams = authenticateRequestSchema.parse(params);
+          const result = await agent.authenticate(
+            validatedParams
+          );
+          return result ?? {};
         }
         case AGENT_METHODS.session_prompt: {
           const validatedParams = promptRequestSchema.parse(params);
           return agent.prompt(validatedParams);
         }
+        default:
+          if (method.startsWith("_")) {
+            if (!agent.extMethod) {
+              throw RequestError.methodNotFound(method);
+            }
+            return agent.extMethod(
+              method.substring(1),
+              params
+            );
+          }
+          throw RequestError.methodNotFound(method);
+      }
+    };
+    const notificationHandler = async (method, params) => {
+      switch (method) {
         case AGENT_METHODS.session_cancel: {
           const validatedParams = cancelNotificationSchema.parse(params);
           return agent.cancel(validatedParams);
         }
         default:
+          if (method.startsWith("_")) {
+            if (!agent.extNotification) {
+              return;
+            }
+            return agent.extNotification(
+              method.substring(1),
+              params
+            );
+          }
           throw RequestError.methodNotFound(method);
       }
     };
-    this.#connection = new Connection(handler, input, output);
+    this.#connection = new Connection(
+      requestHandler,
+      notificationHandler,
+      stream
+    );
   }
   /**
    * Handles session update notifications from the agent.
@@ -179,12 +292,19 @@ var AgentSideConnection = class {
     return await this.#connection.sendRequest(
       CLIENT_METHODS.fs_write_text_file,
       params
-    );
+    ) ?? {};
   }
   /**
-   *  @internal **UNSTABLE**
+   * Executes a command in a new terminal.
    *
-   * This method is not part of the spec, and may be removed or changed at any point.
+   * Returns a `TerminalHandle` that can be used to get output, wait for exit,
+   * kill the command, or release the terminal.
+   *
+   * The terminal can also be embedded in tool calls by using its ID in
+   * `ToolCallContent` with type "terminal".
+   *
+   * @param params - The terminal creation parameters
+   * @returns A handle to control and monitor the terminal
    */
   async createTerminal(params) {
     const response = await this.#connection.sendRequest(
@@ -197,6 +317,22 @@ var AgentSideConnection = class {
       this.#connection
     );
   }
+  /**
+   * Extension method
+   *
+   * Allows the Agent to send an arbitrary request that is not part of the ACP spec.
+   */
+  async extMethod(method, params) {
+    return await this.#connection.sendRequest(`_${method}`, params);
+  }
+  /**
+   * Extension notification
+   *
+   * Allows the Agent to send an arbitrary notification that is not part of the ACP spec.
+   */
+  async extNotification(method, params) {
+    return await this.#connection.sendNotification(`_${method}`, params);
+  }
 };
 var TerminalHandle = class {
   constructor(id, sessionId, conn) {
@@ -206,6 +342,9 @@ var TerminalHandle = class {
   }
   #sessionId;
   #connection;
+  /**
+   * Gets the current terminal output without waiting for the command to exit.
+   */
   async currentOutput() {
     return await this.#connection.sendRequest(
       CLIENT_METHODS.terminal_output,
@@ -215,6 +354,9 @@ var TerminalHandle = class {
       }
     );
   }
+  /**
+   * Waits for the terminal command to complete and returns its exit status.
+   */
   async waitForExit() {
     return await this.#connection.sendRequest(
       CLIENT_METHODS.terminal_wait_for_exit,
@@ -224,11 +366,42 @@ var TerminalHandle = class {
       }
     );
   }
-  async release() {
-    await this.#connection.sendRequest(CLIENT_METHODS.terminal_release, {
+  /**
+   * Kills the terminal command without releasing the terminal.
+   *
+   * The terminal remains valid after killing, allowing you to:
+   * - Get the final output with `currentOutput()`
+   * - Check the exit status
+   * - Release the terminal when done
+   *
+   * Useful for implementing timeouts or cancellation.
+   */
+  async kill() {
+    return await this.#connection.sendRequest(CLIENT_METHODS.terminal_kill, {
       sessionId: this.#sessionId,
       terminalId: this.id
-    });
+    }) ?? {};
+  }
+  /**
+   * Releases the terminal and frees all associated resources.
+   *
+   * If the command is still running, it will be killed.
+   * After release, the terminal ID becomes invalid and cannot be used
+   * with other terminal methods.
+   *
+   * Tool calls that already reference this terminal will continue to
+   * display its output.
+   *
+   * **Important:** Always call this method when done with the terminal.
+   */
+  async release() {
+    return await this.#connection.sendRequest(
+      CLIENT_METHODS.terminal_release,
+      {
+        sessionId: this.#sessionId,
+        terminalId: this.id
+      }
+    ) ?? {};
   }
   async [Symbol.asyncDispose]() {
     await this.release();
@@ -243,14 +416,14 @@ var ClientSideConnection = class {
    * following the ACP specification.
    *
    * @param toClient - A function that creates a Client handler to process incoming agent requests
-   * @param input - The stream for sending data to the agent (typically stdout)
-   * @param output - The stream for receiving data from the agent (typically stdin)
+   * @param stream - The bidirectional message stream for communication. Typically created using
+   *                 {@link ndJsonStream} for stdio-based connections.
    *
    * See protocol docs: [Communication Model](https://agentclientprotocol.com/protocol/overview#communication-model)
    */
-  constructor(toClient, input, output) {
-    const handler = async (method, params) => {
-      const client = toClient(this);
+  constructor(toClient, stream) {
+    const client = toClient(this);
+    const requestHandler = async (method, params) => {
       switch (method) {
         case CLIENT_METHODS.fs_write_text_file: {
           const validatedParams = writeTextFileRequestSchema.parse(params);
@@ -270,12 +443,6 @@ var ClientSideConnection = class {
             validatedParams
           );
         }
-        case CLIENT_METHODS.session_update: {
-          const validatedParams = sessionNotificationSchema.parse(params);
-          return client.sessionUpdate(
-            validatedParams
-          );
-        }
         case CLIENT_METHODS.terminal_create: {
           const validatedParams = createTerminalRequestSchema.parse(params);
           return client.createTerminal?.(
@@ -290,9 +457,10 @@ var ClientSideConnection = class {
         }
         case CLIENT_METHODS.terminal_release: {
           const validatedParams = releaseTerminalRequestSchema.parse(params);
-          return client.releaseTerminal?.(
+          const result = await client.releaseTerminal?.(
             validatedParams
           );
+          return result ?? {};
         }
         case CLIENT_METHODS.terminal_wait_for_exit: {
           const validatedParams = waitForTerminalExitRequestSchema.parse(params);
@@ -300,11 +468,54 @@ var ClientSideConnection = class {
             validatedParams
           );
         }
+        case CLIENT_METHODS.terminal_kill: {
+          const validatedParams = killTerminalCommandRequestSchema.parse(params);
+          const result = await client.killTerminal?.(
+            validatedParams
+          );
+          return result ?? {};
+        }
         default:
+          if (method.startsWith("_")) {
+            const customMethod = method.substring(1);
+            if (!client.extMethod) {
+              throw RequestError.methodNotFound(method);
+            }
+            return client.extMethod(
+              customMethod,
+              params
+            );
+          }
           throw RequestError.methodNotFound(method);
       }
     };
-    this.#connection = new Connection(handler, input, output);
+    const notificationHandler = async (method, params) => {
+      switch (method) {
+        case CLIENT_METHODS.session_update: {
+          const validatedParams = sessionNotificationSchema.parse(params);
+          return client.sessionUpdate(
+            validatedParams
+          );
+        }
+        default:
+          if (method.startsWith("_")) {
+            const customMethod = method.substring(1);
+            if (!client.extNotification) {
+              return;
+            }
+            return client.extNotification(
+              customMethod,
+              params
+            );
+          }
+          throw RequestError.methodNotFound(method);
+      }
+    };
+    this.#connection = new Connection(
+      requestHandler,
+      notificationHandler,
+      stream
+    );
   }
   /**
    * Establishes the connection with a client and negotiates protocol capabilities.
@@ -357,10 +568,31 @@ var ClientSideConnection = class {
    * See protocol docs: [Loading Sessions](https://agentclientprotocol.com/protocol/session-setup#loading-sessions)
    */
   async loadSession(params) {
-    await this.#connection.sendRequest(
+    return await this.#connection.sendRequest(
       AGENT_METHODS.session_load,
       params
-    );
+    ) ?? {};
+  }
+  /**
+   * Sets the operational mode for a session.
+   *
+   * Allows switching between different agent modes (e.g., "ask", "architect", "code")
+   * that affect system prompts, tool availability, and permission behaviors.
+   *
+   * The mode must be one of the modes advertised in `availableModes` during session
+   * creation or loading. Agents may also change modes autonomously and notify the
+   * client via `current_mode_update` notifications.
+   *
+   * This method can be called at any time during a session, whether the Agent is
+   * idle or actively generating a turn.
+   *
+   * See protocol docs: [Session Modes](https://agentclientprotocol.com/protocol/session-modes)
+   */
+  async setSessionMode(params) {
+    return await this.#connection.sendRequest(
+      AGENT_METHODS.session_set_mode,
+      params
+    ) ?? {};
   }
   /**
    * Authenticates the client using the specified authentication method.
@@ -377,7 +609,7 @@ var ClientSideConnection = class {
     return await this.#connection.sendRequest(
       AGENT_METHODS.authenticate,
       params
-    );
+    ) ?? {};
   }
   /**
    * Processes a user prompt within a session.
@@ -417,59 +649,74 @@ var ClientSideConnection = class {
       params
     );
   }
+  /**
+   * Extension method
+   *
+   * Allows the Client to send an arbitrary request that is not part of the ACP spec.
+   */
+  async extMethod(method, params) {
+    return await this.#connection.sendRequest(`_${method}`, params);
+  }
+  /**
+   * Extension notification
+   *
+   * Allows the Client to send an arbitrary notification that is not part of the ACP spec.
+   */
+  async extNotification(method, params) {
+    return await this.#connection.sendNotification(`_${method}`, params);
+  }
 };
 var Connection = class {
   #pendingResponses = /* @__PURE__ */ new Map();
   #nextRequestId = 0;
-  #handler;
-  #peerInput;
+  #requestHandler;
+  #notificationHandler;
+  #stream;
   #writeQueue = Promise.resolve();
-  #textEncoder;
-  constructor(handler, peerInput, peerOutput) {
-    this.#handler = handler;
-    this.#peerInput = peerInput;
-    this.#textEncoder = new TextEncoder();
-    this.#receive(peerOutput);
+  constructor(requestHandler, notificationHandler, stream) {
+    this.#requestHandler = requestHandler;
+    this.#notificationHandler = notificationHandler;
+    this.#stream = stream;
+    this.#receive();
   }
-  async #receive(output) {
-    let content = "";
-    const decoder = new TextDecoder();
-    for await (const chunk of output) {
-      content += decoder.decode(chunk, { stream: true });
-      const lines = content.split("\n");
-      content = lines.pop() || "";
-      for (const line of lines) {
-        const trimmedLine = line.trim();
-        if (trimmedLine) {
-          let id;
-          try {
-            const message = JSON.parse(trimmedLine);
-            id = message.id;
-            this.#processMessage(message);
-          } catch (err) {
-            console.error(
-              "Unexpected error during message processing:",
-              trimmedLine,
-              err
-            );
-            if (id) {
-              this.#sendMessage({
-                jsonrpc: "2.0",
-                id,
-                error: {
-                  code: -32700,
-                  message: "Parse error"
-                }
-              });
-            }
+  async #receive() {
+    const reader = this.#stream.readable.getReader();
+    try {
+      while (true) {
+        const { value: message, done } = await reader.read();
+        if (done) {
+          break;
+        }
+        if (!message) {
+          continue;
+        }
+        try {
+          this.#processMessage(message);
+        } catch (err) {
+          console.error(
+            "Unexpected error during message processing:",
+            message,
+            err
+          );
+          if ("id" in message && message.id !== void 0) {
+            this.#sendMessage({
+              jsonrpc: "2.0",
+              id: message.id,
+              error: {
+                code: -32700,
+                message: "Parse error"
+              }
+            });
           }
         }
       }
+    } finally {
+      reader.releaseLock();
     }
   }
   async #processMessage(message) {
     if ("method" in message && "id" in message) {
-      const response = await this.#tryCallHandler(
+      const response = await this.#tryCallRequestHandler(
         message.method,
         message.params
       );
@@ -482,7 +729,7 @@ var Connection = class {
         ...response
       });
     } else if ("method" in message) {
-      const response = await this.#tryCallHandler(
+      const response = await this.#tryCallNotificationHandler(
         message.method,
         message.params
       );
@@ -495,10 +742,36 @@ var Connection = class {
       console.error("Invalid message", { message });
     }
   }
-  async #tryCallHandler(method, params) {
+  async #tryCallRequestHandler(method, params) {
     try {
-      const result = await this.#handler(method, params);
+      const result = await this.#requestHandler(method, params);
       return { result: result ?? null };
+    } catch (error) {
+      if (error instanceof RequestError) {
+        return error.toResult();
+      }
+      if (error instanceof external_exports.ZodError) {
+        return RequestError.invalidParams(error.format()).toResult();
+      }
+      let details;
+      if (error instanceof Error) {
+        details = error.message;
+      } else if (typeof error === "object" && error != null && "message" in error && typeof error.message === "string") {
+        details = error.message;
+      }
+      try {
+        return RequestError.internalError(
+          details ? JSON.parse(details) : {}
+        ).toResult();
+      } catch (_err) {
+        return RequestError.internalError({ details }).toResult();
+      }
+    }
+  }
+  async #tryCallNotificationHandler(method, params) {
+    try {
+      await this.#notificationHandler(method, params);
+      return { result: null };
     } catch (error) {
       if (error instanceof RequestError) {
         return error.toResult();
@@ -545,12 +818,11 @@ var Connection = class {
   async sendNotification(method, params) {
     await this.#sendMessage({ jsonrpc: "2.0", method, params });
   }
-  async #sendMessage(json) {
-    const content = JSON.stringify(json) + "\n";
+  async #sendMessage(message) {
     this.#writeQueue = this.#writeQueue.then(async () => {
-      const writer = this.#peerInput.getWriter();
+      const writer = this.#stream.writable.getWriter();
       try {
-        await writer.write(this.#textEncoder.encode(content));
+        await writer.write(message);
       } finally {
         writer.releaseLock();
       }
@@ -638,6 +910,8 @@ export {
   authMethodSchema,
   authenticateRequestSchema,
   authenticateResponseSchema,
+  availableCommandInputSchema,
+  availableCommandSchema,
   blobResourceContentsSchema,
   cancelNotificationSchema,
   clientCapabilitiesSchema,
@@ -649,12 +923,23 @@ export {
   createTerminalResponseSchema,
   embeddedResourceResourceSchema,
   envVariableSchema,
+  extMethodRequest1Schema,
+  extMethodRequestSchema,
+  extMethodResponse1Schema,
+  extMethodResponseSchema,
+  extNotification1Schema,
+  extNotificationSchema,
   fileSystemCapabilitySchema,
+  httpHeaderSchema,
   initializeRequestSchema,
   initializeResponseSchema,
+  killTerminalCommandRequestSchema,
+  killTerminalResponseSchema,
   loadSessionRequestSchema,
   loadSessionResponseSchema,
+  mcpCapabilitiesSchema,
   mcpServerSchema,
+  ndJsonStream,
   newSessionRequestSchema,
   newSessionResponseSchema,
   permissionOptionSchema,
@@ -669,8 +954,13 @@ export {
   requestPermissionRequestSchema,
   requestPermissionResponseSchema,
   roleSchema,
-  sessionIdSchema,
+  sessionModeIdSchema,
+  sessionModeSchema,
+  sessionModeStateSchema,
   sessionNotificationSchema,
+  setSessionModeRequestSchema,
+  setSessionModeResponseSchema,
+  stdioSchema,
   terminalExitStatusSchema,
   terminalOutputRequestSchema,
   terminalOutputResponseSchema,
@@ -680,6 +970,7 @@ export {
   toolCallStatusSchema,
   toolCallUpdateSchema,
   toolKindSchema,
+  unstructuredCommandInputSchema,
   waitForTerminalExitRequestSchema,
   waitForTerminalExitResponseSchema,
   writeTextFileRequestSchema,

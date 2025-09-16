@@ -32,6 +32,8 @@ __export(schema_exports, {
   authMethodSchema: () => authMethodSchema,
   authenticateRequestSchema: () => authenticateRequestSchema,
   authenticateResponseSchema: () => authenticateResponseSchema,
+  availableCommandInputSchema: () => availableCommandInputSchema,
+  availableCommandSchema: () => availableCommandSchema,
   blobResourceContentsSchema: () => blobResourceContentsSchema,
   cancelNotificationSchema: () => cancelNotificationSchema,
   clientCapabilitiesSchema: () => clientCapabilitiesSchema,
@@ -43,11 +45,21 @@ __export(schema_exports, {
   createTerminalResponseSchema: () => createTerminalResponseSchema,
   embeddedResourceResourceSchema: () => embeddedResourceResourceSchema,
   envVariableSchema: () => envVariableSchema,
+  extMethodRequest1Schema: () => extMethodRequest1Schema,
+  extMethodRequestSchema: () => extMethodRequestSchema,
+  extMethodResponse1Schema: () => extMethodResponse1Schema,
+  extMethodResponseSchema: () => extMethodResponseSchema,
+  extNotification1Schema: () => extNotification1Schema,
+  extNotificationSchema: () => extNotificationSchema,
   fileSystemCapabilitySchema: () => fileSystemCapabilitySchema,
+  httpHeaderSchema: () => httpHeaderSchema,
   initializeRequestSchema: () => initializeRequestSchema,
   initializeResponseSchema: () => initializeResponseSchema,
+  killTerminalCommandRequestSchema: () => killTerminalCommandRequestSchema,
+  killTerminalResponseSchema: () => killTerminalResponseSchema,
   loadSessionRequestSchema: () => loadSessionRequestSchema,
   loadSessionResponseSchema: () => loadSessionResponseSchema,
+  mcpCapabilitiesSchema: () => mcpCapabilitiesSchema,
   mcpServerSchema: () => mcpServerSchema,
   newSessionRequestSchema: () => newSessionRequestSchema,
   newSessionResponseSchema: () => newSessionResponseSchema,
@@ -63,8 +75,13 @@ __export(schema_exports, {
   requestPermissionRequestSchema: () => requestPermissionRequestSchema,
   requestPermissionResponseSchema: () => requestPermissionResponseSchema,
   roleSchema: () => roleSchema,
-  sessionIdSchema: () => sessionIdSchema,
+  sessionModeIdSchema: () => sessionModeIdSchema,
+  sessionModeSchema: () => sessionModeSchema,
+  sessionModeStateSchema: () => sessionModeStateSchema,
   sessionNotificationSchema: () => sessionNotificationSchema,
+  setSessionModeRequestSchema: () => setSessionModeRequestSchema,
+  setSessionModeResponseSchema: () => setSessionModeResponseSchema,
+  stdioSchema: () => stdioSchema,
   terminalExitStatusSchema: () => terminalExitStatusSchema,
   terminalOutputRequestSchema: () => terminalOutputRequestSchema,
   terminalOutputResponseSchema: () => terminalOutputResponseSchema,
@@ -74,6 +91,7 @@ __export(schema_exports, {
   toolCallStatusSchema: () => toolCallStatusSchema,
   toolCallUpdateSchema: () => toolCallUpdateSchema,
   toolKindSchema: () => toolKindSchema,
+  unstructuredCommandInputSchema: () => unstructuredCommandInputSchema,
   waitForTerminalExitRequestSchema: () => waitForTerminalExitRequestSchema,
   waitForTerminalExitResponseSchema: () => waitForTerminalExitResponseSchema,
   writeTextFileRequestSchema: () => writeTextFileRequestSchema,
@@ -4129,7 +4147,8 @@ var AGENT_METHODS = {
   session_cancel: "session/cancel",
   session_load: "session/load",
   session_new: "session/new",
-  session_prompt: "session/prompt"
+  session_prompt: "session/prompt",
+  session_set_mode: "session/set_mode"
 };
 var CLIENT_METHODS = {
   fs_read_text_file: "fs/read_text_file",
@@ -4137,29 +4156,55 @@ var CLIENT_METHODS = {
   session_request_permission: "session/request_permission",
   session_update: "session/update",
   terminal_create: "terminal/create",
+  terminal_kill: "terminal/kill",
   terminal_output: "terminal/output",
   terminal_release: "terminal/release",
   terminal_wait_for_exit: "terminal/wait_for_exit"
 };
 var PROTOCOL_VERSION = 1;
 var writeTextFileRequestSchema = external_exports.object({
+  _meta: external_exports.record(external_exports.unknown()).optional(),
   content: external_exports.string(),
   path: external_exports.string(),
   sessionId: external_exports.string()
 });
 var readTextFileRequestSchema = external_exports.object({
+  _meta: external_exports.record(external_exports.unknown()).optional(),
   limit: external_exports.number().optional().nullable(),
   line: external_exports.number().optional().nullable(),
   path: external_exports.string(),
   sessionId: external_exports.string()
 });
+var terminalOutputRequestSchema = external_exports.object({
+  _meta: external_exports.record(external_exports.unknown()).optional(),
+  sessionId: external_exports.string(),
+  terminalId: external_exports.string()
+});
+var releaseTerminalRequestSchema = external_exports.object({
+  _meta: external_exports.record(external_exports.unknown()).optional(),
+  sessionId: external_exports.string(),
+  terminalId: external_exports.string()
+});
+var waitForTerminalExitRequestSchema = external_exports.object({
+  _meta: external_exports.record(external_exports.unknown()).optional(),
+  sessionId: external_exports.string(),
+  terminalId: external_exports.string()
+});
+var killTerminalCommandRequestSchema = external_exports.object({
+  _meta: external_exports.record(external_exports.unknown()).optional(),
+  sessionId: external_exports.string(),
+  terminalId: external_exports.string()
+});
+var extMethodRequestSchema = external_exports.record(external_exports.unknown());
 var roleSchema = external_exports.union([external_exports.literal("assistant"), external_exports.literal("user")]);
 var textResourceContentsSchema = external_exports.object({
+  _meta: external_exports.record(external_exports.unknown()).optional(),
   mimeType: external_exports.string().optional().nullable(),
   text: external_exports.string(),
   uri: external_exports.string()
 });
 var blobResourceContentsSchema = external_exports.object({
+  _meta: external_exports.record(external_exports.unknown()).optional(),
   blob: external_exports.string(),
   mimeType: external_exports.string().optional().nullable(),
   uri: external_exports.string()
@@ -4173,6 +4218,7 @@ var toolKindSchema = external_exports.union([
   external_exports.literal("execute"),
   external_exports.literal("think"),
   external_exports.literal("fetch"),
+  external_exports.literal("switch_mode"),
   external_exports.literal("other")
 ]);
 var toolCallStatusSchema = external_exports.union([
@@ -4181,12 +4227,15 @@ var toolCallStatusSchema = external_exports.union([
   external_exports.literal("completed"),
   external_exports.literal("failed")
 ]);
-var sessionIdSchema = external_exports.string();
-var writeTextFileResponseSchema = external_exports.null();
+var writeTextFileResponseSchema = external_exports.object({
+  _meta: external_exports.record(external_exports.unknown()).optional()
+});
 var readTextFileResponseSchema = external_exports.object({
+  _meta: external_exports.record(external_exports.unknown()).optional(),
   content: external_exports.string()
 });
 var requestPermissionResponseSchema = external_exports.object({
+  _meta: external_exports.record(external_exports.unknown()).optional(),
   outcome: external_exports.union([
     external_exports.object({
       outcome: external_exports.literal("cancelled")
@@ -4198,20 +4247,43 @@ var requestPermissionResponseSchema = external_exports.object({
   ])
 });
 var createTerminalResponseSchema = external_exports.object({
+  _meta: external_exports.record(external_exports.unknown()).optional(),
   terminalId: external_exports.string()
 });
-var releaseTerminalResponseSchema = external_exports.null();
+var releaseTerminalResponseSchema = external_exports.object({
+  _meta: external_exports.record(external_exports.unknown()).optional()
+});
 var waitForTerminalExitResponseSchema = external_exports.object({
+  _meta: external_exports.record(external_exports.unknown()).optional(),
   exitCode: external_exports.number().optional().nullable(),
   signal: external_exports.string().optional().nullable()
 });
+var killTerminalResponseSchema = external_exports.object({
+  _meta: external_exports.record(external_exports.unknown()).optional()
+});
+var extMethodResponseSchema = external_exports.record(external_exports.unknown());
 var cancelNotificationSchema = external_exports.object({
+  _meta: external_exports.record(external_exports.unknown()).optional(),
   sessionId: external_exports.string()
 });
+var extNotificationSchema = external_exports.record(external_exports.unknown());
 var authenticateRequestSchema = external_exports.object({
+  _meta: external_exports.record(external_exports.unknown()).optional(),
   methodId: external_exports.string()
 });
+var setSessionModeRequestSchema = external_exports.object({
+  _meta: external_exports.record(external_exports.unknown()).optional(),
+  modeId: external_exports.string(),
+  sessionId: external_exports.string()
+});
+var extMethodRequest1Schema = external_exports.record(external_exports.unknown());
+var httpHeaderSchema = external_exports.object({
+  _meta: external_exports.record(external_exports.unknown()).optional(),
+  name: external_exports.string(),
+  value: external_exports.string()
+});
 var annotationsSchema = external_exports.object({
+  _meta: external_exports.record(external_exports.unknown()).optional(),
   audience: external_exports.array(roleSchema).optional().nullable(),
   lastModified: external_exports.string().optional().nullable(),
   priority: external_exports.number().optional().nullable()
@@ -4220,12 +4292,14 @@ var embeddedResourceResourceSchema = external_exports.union([
   textResourceContentsSchema,
   blobResourceContentsSchema
 ]);
-var authenticateResponseSchema = external_exports.null();
-var newSessionResponseSchema = external_exports.object({
-  sessionId: external_exports.string()
+var authenticateResponseSchema = external_exports.object({
+  _meta: external_exports.record(external_exports.unknown()).optional()
 });
-var loadSessionResponseSchema = external_exports.null();
+var setSessionModeResponseSchema = external_exports.object({
+  meta: external_exports.unknown().optional()
+});
 var promptResponseSchema = external_exports.object({
+  _meta: external_exports.record(external_exports.unknown()).optional(),
   stopReason: external_exports.union([
     external_exports.literal("end_turn"),
     external_exports.literal("max_tokens"),
@@ -4234,7 +4308,14 @@ var promptResponseSchema = external_exports.object({
     external_exports.literal("cancelled")
   ])
 });
+var extMethodResponse1Schema = external_exports.record(external_exports.unknown());
+var sessionModeIdSchema = external_exports.string();
+var extNotification1Schema = external_exports.record(external_exports.unknown());
+var unstructuredCommandInputSchema = external_exports.object({
+  hint: external_exports.string()
+});
 var permissionOptionSchema = external_exports.object({
+  _meta: external_exports.record(external_exports.unknown()).optional(),
   kind: external_exports.union([
     external_exports.literal("allow_once"),
     external_exports.literal("allow_always"),
@@ -4248,11 +4329,13 @@ var toolCallContentSchema = external_exports.union([
   external_exports.object({
     content: external_exports.union([
       external_exports.object({
+        _meta: external_exports.record(external_exports.unknown()).optional(),
         annotations: annotationsSchema.optional().nullable(),
         text: external_exports.string(),
         type: external_exports.literal("text")
       }),
       external_exports.object({
+        _meta: external_exports.record(external_exports.unknown()).optional(),
         annotations: annotationsSchema.optional().nullable(),
         data: external_exports.string(),
         mimeType: external_exports.string(),
@@ -4260,12 +4343,14 @@ var toolCallContentSchema = external_exports.union([
         uri: external_exports.string().optional().nullable()
       }),
       external_exports.object({
+        _meta: external_exports.record(external_exports.unknown()).optional(),
         annotations: annotationsSchema.optional().nullable(),
         data: external_exports.string(),
         mimeType: external_exports.string(),
         type: external_exports.literal("audio")
       }),
       external_exports.object({
+        _meta: external_exports.record(external_exports.unknown()).optional(),
         annotations: annotationsSchema.optional().nullable(),
         description: external_exports.string().optional().nullable(),
         mimeType: external_exports.string().optional().nullable(),
@@ -4276,6 +4361,7 @@ var toolCallContentSchema = external_exports.union([
         uri: external_exports.string()
       }),
       external_exports.object({
+        _meta: external_exports.record(external_exports.unknown()).optional(),
         annotations: annotationsSchema.optional().nullable(),
         resource: embeddedResourceResourceSchema,
         type: external_exports.literal("resource")
@@ -4284,6 +4370,7 @@ var toolCallContentSchema = external_exports.union([
     type: external_exports.literal("content")
   }),
   external_exports.object({
+    _meta: external_exports.record(external_exports.unknown()).optional(),
     newText: external_exports.string(),
     oldText: external_exports.string().optional().nullable(),
     path: external_exports.string(),
@@ -4295,51 +4382,55 @@ var toolCallContentSchema = external_exports.union([
   })
 ]);
 var toolCallLocationSchema = external_exports.object({
+  _meta: external_exports.record(external_exports.unknown()).optional(),
   line: external_exports.number().optional().nullable(),
   path: external_exports.string()
 });
 var envVariableSchema = external_exports.object({
+  _meta: external_exports.record(external_exports.unknown()).optional(),
   name: external_exports.string(),
   value: external_exports.string()
 });
-var terminalOutputRequestSchema = external_exports.object({
-  sessionId: sessionIdSchema,
-  terminalId: external_exports.string()
-});
-var releaseTerminalRequestSchema = external_exports.object({
-  sessionId: sessionIdSchema,
-  terminalId: external_exports.string()
-});
-var waitForTerminalExitRequestSchema = external_exports.object({
-  sessionId: sessionIdSchema,
-  terminalId: external_exports.string()
-});
 var terminalExitStatusSchema = external_exports.object({
+  _meta: external_exports.record(external_exports.unknown()).optional(),
   exitCode: external_exports.number().optional().nullable(),
   signal: external_exports.string().optional().nullable()
 });
 var fileSystemCapabilitySchema = external_exports.object({
+  _meta: external_exports.record(external_exports.unknown()).optional(),
   readTextFile: external_exports.boolean().optional(),
   writeTextFile: external_exports.boolean().optional()
 });
-var mcpServerSchema = external_exports.object({
+var stdioSchema = external_exports.object({
   args: external_exports.array(external_exports.string()),
   command: external_exports.string(),
   env: external_exports.array(envVariableSchema),
   name: external_exports.string()
 });
-var loadSessionRequestSchema = external_exports.object({
-  cwd: external_exports.string(),
-  mcpServers: external_exports.array(mcpServerSchema),
-  sessionId: external_exports.string()
-});
+var mcpServerSchema = external_exports.union([
+  external_exports.object({
+    headers: external_exports.array(httpHeaderSchema),
+    name: external_exports.string(),
+    type: external_exports.literal("http"),
+    url: external_exports.string()
+  }),
+  external_exports.object({
+    headers: external_exports.array(httpHeaderSchema),
+    name: external_exports.string(),
+    type: external_exports.literal("sse"),
+    url: external_exports.string()
+  }),
+  stdioSchema
+]);
 var contentBlockSchema = external_exports.union([
   external_exports.object({
+    _meta: external_exports.record(external_exports.unknown()).optional(),
     annotations: annotationsSchema.optional().nullable(),
     text: external_exports.string(),
     type: external_exports.literal("text")
   }),
   external_exports.object({
+    _meta: external_exports.record(external_exports.unknown()).optional(),
     annotations: annotationsSchema.optional().nullable(),
     data: external_exports.string(),
     mimeType: external_exports.string(),
@@ -4347,12 +4438,14 @@ var contentBlockSchema = external_exports.union([
     uri: external_exports.string().optional().nullable()
   }),
   external_exports.object({
+    _meta: external_exports.record(external_exports.unknown()).optional(),
     annotations: annotationsSchema.optional().nullable(),
     data: external_exports.string(),
     mimeType: external_exports.string(),
     type: external_exports.literal("audio")
   }),
   external_exports.object({
+    _meta: external_exports.record(external_exports.unknown()).optional(),
     annotations: annotationsSchema.optional().nullable(),
     description: external_exports.string().optional().nullable(),
     mimeType: external_exports.string().optional().nullable(),
@@ -4363,22 +4456,42 @@ var contentBlockSchema = external_exports.union([
     uri: external_exports.string()
   }),
   external_exports.object({
+    _meta: external_exports.record(external_exports.unknown()).optional(),
     annotations: annotationsSchema.optional().nullable(),
     resource: embeddedResourceResourceSchema,
     type: external_exports.literal("resource")
   })
 ]);
 var authMethodSchema = external_exports.object({
+  _meta: external_exports.record(external_exports.unknown()).optional(),
   description: external_exports.string().optional().nullable(),
   id: external_exports.string(),
   name: external_exports.string()
 });
+var mcpCapabilitiesSchema = external_exports.object({
+  _meta: external_exports.record(external_exports.unknown()).optional(),
+  http: external_exports.boolean().optional(),
+  sse: external_exports.boolean().optional()
+});
 var promptCapabilitiesSchema = external_exports.object({
+  _meta: external_exports.record(external_exports.unknown()).optional(),
   audio: external_exports.boolean().optional(),
   embeddedContext: external_exports.boolean().optional(),
   image: external_exports.boolean().optional()
 });
+var sessionModeSchema = external_exports.object({
+  _meta: external_exports.record(external_exports.unknown()).optional(),
+  description: external_exports.string().optional().nullable(),
+  id: sessionModeIdSchema,
+  name: external_exports.string()
+});
+var sessionModeStateSchema = external_exports.object({
+  _meta: external_exports.record(external_exports.unknown()).optional(),
+  availableModes: external_exports.array(sessionModeSchema),
+  currentModeId: external_exports.string()
+});
 var planEntrySchema = external_exports.object({
+  _meta: external_exports.record(external_exports.unknown()).optional(),
   content: external_exports.string(),
   priority: external_exports.union([external_exports.literal("high"), external_exports.literal("medium"), external_exports.literal("low")]),
   status: external_exports.union([
@@ -4387,29 +4500,109 @@ var planEntrySchema = external_exports.object({
     external_exports.literal("completed")
   ])
 });
-var clientNotificationSchema = cancelNotificationSchema;
+var availableCommandInputSchema = unstructuredCommandInputSchema;
+var clientNotificationSchema = external_exports.union([
+  cancelNotificationSchema,
+  extNotificationSchema
+]);
 var createTerminalRequestSchema = external_exports.object({
+  _meta: external_exports.record(external_exports.unknown()).optional(),
   args: external_exports.array(external_exports.string()).optional(),
   command: external_exports.string(),
   cwd: external_exports.string().optional().nullable(),
   env: external_exports.array(envVariableSchema).optional(),
   outputByteLimit: external_exports.number().optional().nullable(),
-  sessionId: sessionIdSchema
+  sessionId: external_exports.string()
 });
 var terminalOutputResponseSchema = external_exports.object({
+  _meta: external_exports.record(external_exports.unknown()).optional(),
   exitStatus: terminalExitStatusSchema.optional().nullable(),
   output: external_exports.string(),
   truncated: external_exports.boolean()
 });
 var newSessionRequestSchema = external_exports.object({
+  _meta: external_exports.record(external_exports.unknown()).optional(),
   cwd: external_exports.string(),
   mcpServers: external_exports.array(mcpServerSchema)
 });
+var loadSessionRequestSchema = external_exports.object({
+  _meta: external_exports.record(external_exports.unknown()).optional(),
+  cwd: external_exports.string(),
+  mcpServers: external_exports.array(mcpServerSchema),
+  sessionId: external_exports.string()
+});
 var promptRequestSchema = external_exports.object({
+  _meta: external_exports.record(external_exports.unknown()).optional(),
   prompt: external_exports.array(contentBlockSchema),
   sessionId: external_exports.string()
 });
+var newSessionResponseSchema = external_exports.object({
+  _meta: external_exports.record(external_exports.unknown()).optional(),
+  modes: sessionModeStateSchema.optional().nullable(),
+  sessionId: external_exports.string()
+});
+var loadSessionResponseSchema = external_exports.object({
+  _meta: external_exports.record(external_exports.unknown()).optional(),
+  modes: sessionModeStateSchema.optional().nullable()
+});
+var toolCallUpdateSchema = external_exports.object({
+  _meta: external_exports.record(external_exports.unknown()).optional(),
+  content: external_exports.array(toolCallContentSchema).optional().nullable(),
+  kind: toolKindSchema.optional().nullable(),
+  locations: external_exports.array(toolCallLocationSchema).optional().nullable(),
+  rawInput: external_exports.record(external_exports.unknown()).optional(),
+  rawOutput: external_exports.record(external_exports.unknown()).optional(),
+  status: toolCallStatusSchema.optional().nullable(),
+  title: external_exports.string().optional().nullable(),
+  toolCallId: external_exports.string()
+});
+var clientCapabilitiesSchema = external_exports.object({
+  _meta: external_exports.record(external_exports.unknown()).optional(),
+  fs: fileSystemCapabilitySchema.optional(),
+  terminal: external_exports.boolean().optional()
+});
+var agentCapabilitiesSchema = external_exports.object({
+  _meta: external_exports.record(external_exports.unknown()).optional(),
+  loadSession: external_exports.boolean().optional(),
+  mcpCapabilities: mcpCapabilitiesSchema.optional(),
+  promptCapabilities: promptCapabilitiesSchema.optional()
+});
+var availableCommandSchema = external_exports.object({
+  _meta: external_exports.record(external_exports.unknown()).optional(),
+  description: external_exports.string(),
+  input: availableCommandInputSchema.optional().nullable(),
+  name: external_exports.string()
+});
+var clientResponseSchema = external_exports.union([
+  writeTextFileResponseSchema,
+  readTextFileResponseSchema,
+  requestPermissionResponseSchema,
+  createTerminalResponseSchema,
+  terminalOutputResponseSchema,
+  releaseTerminalResponseSchema,
+  waitForTerminalExitResponseSchema,
+  killTerminalResponseSchema,
+  extMethodResponseSchema
+]);
+var requestPermissionRequestSchema = external_exports.object({
+  _meta: external_exports.record(external_exports.unknown()).optional(),
+  options: external_exports.array(permissionOptionSchema),
+  sessionId: external_exports.string(),
+  toolCall: toolCallUpdateSchema
+});
+var initializeRequestSchema = external_exports.object({
+  _meta: external_exports.record(external_exports.unknown()).optional(),
+  clientCapabilities: clientCapabilitiesSchema.optional(),
+  protocolVersion: external_exports.number()
+});
+var initializeResponseSchema = external_exports.object({
+  _meta: external_exports.record(external_exports.unknown()).optional(),
+  agentCapabilities: agentCapabilitiesSchema.optional(),
+  authMethods: external_exports.array(authMethodSchema).optional(),
+  protocolVersion: external_exports.number()
+});
 var sessionNotificationSchema = external_exports.object({
+  _meta: external_exports.record(external_exports.unknown()).optional(),
   sessionId: external_exports.string(),
   update: external_exports.union([
     external_exports.object({
@@ -4425,6 +4618,7 @@ var sessionNotificationSchema = external_exports.object({
       sessionUpdate: external_exports.literal("agent_thought_chunk")
     }),
     external_exports.object({
+      _meta: external_exports.record(external_exports.unknown()).optional(),
       content: external_exports.array(toolCallContentSchema).optional(),
       kind: external_exports.union([
         external_exports.literal("read"),
@@ -4435,6 +4629,7 @@ var sessionNotificationSchema = external_exports.object({
         external_exports.literal("execute"),
         external_exports.literal("think"),
         external_exports.literal("fetch"),
+        external_exports.literal("switch_mode"),
         external_exports.literal("other")
       ]).optional(),
       locations: external_exports.array(toolCallLocationSchema).optional(),
@@ -4451,6 +4646,7 @@ var sessionNotificationSchema = external_exports.object({
       toolCallId: external_exports.string()
     }),
     external_exports.object({
+      _meta: external_exports.record(external_exports.unknown()).optional(),
       content: external_exports.array(toolCallContentSchema).optional().nullable(),
       kind: toolKindSchema.optional().nullable(),
       locations: external_exports.array(toolCallLocationSchema).optional().nullable(),
@@ -4462,52 +4658,19 @@ var sessionNotificationSchema = external_exports.object({
       toolCallId: external_exports.string()
     }),
     external_exports.object({
+      _meta: external_exports.record(external_exports.unknown()).optional(),
       entries: external_exports.array(planEntrySchema),
       sessionUpdate: external_exports.literal("plan")
+    }),
+    external_exports.object({
+      availableCommands: external_exports.array(availableCommandSchema),
+      sessionUpdate: external_exports.literal("available_commands_update")
+    }),
+    external_exports.object({
+      currentModeId: sessionModeIdSchema,
+      sessionUpdate: external_exports.literal("current_mode_update")
     })
   ])
-});
-var toolCallUpdateSchema = external_exports.object({
-  content: external_exports.array(toolCallContentSchema).optional().nullable(),
-  kind: toolKindSchema.optional().nullable(),
-  locations: external_exports.array(toolCallLocationSchema).optional().nullable(),
-  rawInput: external_exports.record(external_exports.unknown()).optional(),
-  rawOutput: external_exports.record(external_exports.unknown()).optional(),
-  status: toolCallStatusSchema.optional().nullable(),
-  title: external_exports.string().optional().nullable(),
-  toolCallId: external_exports.string()
-});
-var clientCapabilitiesSchema = external_exports.object({
-  fs: fileSystemCapabilitySchema.optional(),
-  terminal: external_exports.boolean().optional()
-});
-var agentCapabilitiesSchema = external_exports.object({
-  loadSession: external_exports.boolean().optional(),
-  promptCapabilities: promptCapabilitiesSchema.optional()
-});
-var clientResponseSchema = external_exports.union([
-  writeTextFileResponseSchema,
-  readTextFileResponseSchema,
-  requestPermissionResponseSchema,
-  createTerminalResponseSchema,
-  terminalOutputResponseSchema,
-  releaseTerminalResponseSchema,
-  waitForTerminalExitResponseSchema
-]);
-var agentNotificationSchema = sessionNotificationSchema;
-var requestPermissionRequestSchema = external_exports.object({
-  options: external_exports.array(permissionOptionSchema),
-  sessionId: external_exports.string(),
-  toolCall: toolCallUpdateSchema
-});
-var initializeRequestSchema = external_exports.object({
-  clientCapabilities: clientCapabilitiesSchema.optional(),
-  protocolVersion: external_exports.number()
-});
-var initializeResponseSchema = external_exports.object({
-  agentCapabilities: agentCapabilitiesSchema.optional(),
-  authMethods: external_exports.array(authMethodSchema).optional(),
-  protocolVersion: external_exports.number()
 });
 var clientRequestSchema = external_exports.union([
   writeTextFileRequestSchema,
@@ -4516,21 +4679,31 @@ var clientRequestSchema = external_exports.union([
   createTerminalRequestSchema,
   terminalOutputRequestSchema,
   releaseTerminalRequestSchema,
-  waitForTerminalExitRequestSchema
+  waitForTerminalExitRequestSchema,
+  killTerminalCommandRequestSchema,
+  extMethodRequestSchema
 ]);
 var agentRequestSchema = external_exports.union([
   initializeRequestSchema,
   authenticateRequestSchema,
   newSessionRequestSchema,
   loadSessionRequestSchema,
-  promptRequestSchema
+  setSessionModeRequestSchema,
+  promptRequestSchema,
+  extMethodRequest1Schema
 ]);
 var agentResponseSchema = external_exports.union([
   initializeResponseSchema,
   authenticateResponseSchema,
   newSessionResponseSchema,
   loadSessionResponseSchema,
-  promptResponseSchema
+  setSessionModeResponseSchema,
+  promptResponseSchema,
+  extMethodResponse1Schema
+]);
+var agentNotificationSchema = external_exports.union([
+  sessionNotificationSchema,
+  extNotification1Schema
 ]);
 var agentClientProtocolSchema = external_exports.union([
   clientRequestSchema,
@@ -4554,6 +4727,8 @@ var agentClientProtocolSchema = external_exports.union([
   authMethodSchema,
   authenticateRequestSchema,
   authenticateResponseSchema,
+  availableCommandInputSchema,
+  availableCommandSchema,
   blobResourceContentsSchema,
   cancelNotificationSchema,
   clientCapabilitiesSchema,
@@ -4565,11 +4740,21 @@ var agentClientProtocolSchema = external_exports.union([
   createTerminalResponseSchema,
   embeddedResourceResourceSchema,
   envVariableSchema,
+  extMethodRequest1Schema,
+  extMethodRequestSchema,
+  extMethodResponse1Schema,
+  extMethodResponseSchema,
+  extNotification1Schema,
+  extNotificationSchema,
   fileSystemCapabilitySchema,
+  httpHeaderSchema,
   initializeRequestSchema,
   initializeResponseSchema,
+  killTerminalCommandRequestSchema,
+  killTerminalResponseSchema,
   loadSessionRequestSchema,
   loadSessionResponseSchema,
+  mcpCapabilitiesSchema,
   mcpServerSchema,
   newSessionRequestSchema,
   newSessionResponseSchema,
@@ -4585,8 +4770,13 @@ var agentClientProtocolSchema = external_exports.union([
   requestPermissionRequestSchema,
   requestPermissionResponseSchema,
   roleSchema,
-  sessionIdSchema,
+  sessionModeIdSchema,
+  sessionModeSchema,
+  sessionModeStateSchema,
   sessionNotificationSchema,
+  setSessionModeRequestSchema,
+  setSessionModeResponseSchema,
+  stdioSchema,
   terminalExitStatusSchema,
   terminalOutputRequestSchema,
   terminalOutputResponseSchema,
@@ -4596,6 +4786,7 @@ var agentClientProtocolSchema = external_exports.union([
   toolCallStatusSchema,
   toolCallUpdateSchema,
   toolKindSchema,
+  unstructuredCommandInputSchema,
   waitForTerminalExitRequestSchema,
   waitForTerminalExitResponseSchema,
   writeTextFileRequestSchema,

@@ -36,6 +36,8 @@ __export(acp_exports, {
   authMethodSchema: () => authMethodSchema,
   authenticateRequestSchema: () => authenticateRequestSchema,
   authenticateResponseSchema: () => authenticateResponseSchema,
+  availableCommandInputSchema: () => availableCommandInputSchema,
+  availableCommandSchema: () => availableCommandSchema,
   blobResourceContentsSchema: () => blobResourceContentsSchema,
   cancelNotificationSchema: () => cancelNotificationSchema,
   clientCapabilitiesSchema: () => clientCapabilitiesSchema,
@@ -47,12 +49,23 @@ __export(acp_exports, {
   createTerminalResponseSchema: () => createTerminalResponseSchema,
   embeddedResourceResourceSchema: () => embeddedResourceResourceSchema,
   envVariableSchema: () => envVariableSchema,
+  extMethodRequest1Schema: () => extMethodRequest1Schema,
+  extMethodRequestSchema: () => extMethodRequestSchema,
+  extMethodResponse1Schema: () => extMethodResponse1Schema,
+  extMethodResponseSchema: () => extMethodResponseSchema,
+  extNotification1Schema: () => extNotification1Schema,
+  extNotificationSchema: () => extNotificationSchema,
   fileSystemCapabilitySchema: () => fileSystemCapabilitySchema,
+  httpHeaderSchema: () => httpHeaderSchema,
   initializeRequestSchema: () => initializeRequestSchema,
   initializeResponseSchema: () => initializeResponseSchema,
+  killTerminalCommandRequestSchema: () => killTerminalCommandRequestSchema,
+  killTerminalResponseSchema: () => killTerminalResponseSchema,
   loadSessionRequestSchema: () => loadSessionRequestSchema,
   loadSessionResponseSchema: () => loadSessionResponseSchema,
+  mcpCapabilitiesSchema: () => mcpCapabilitiesSchema,
   mcpServerSchema: () => mcpServerSchema,
+  ndJsonStream: () => ndJsonStream,
   newSessionRequestSchema: () => newSessionRequestSchema,
   newSessionResponseSchema: () => newSessionResponseSchema,
   permissionOptionSchema: () => permissionOptionSchema,
@@ -67,8 +80,13 @@ __export(acp_exports, {
   requestPermissionRequestSchema: () => requestPermissionRequestSchema,
   requestPermissionResponseSchema: () => requestPermissionResponseSchema,
   roleSchema: () => roleSchema,
-  sessionIdSchema: () => sessionIdSchema,
+  sessionModeIdSchema: () => sessionModeIdSchema,
+  sessionModeSchema: () => sessionModeSchema,
+  sessionModeStateSchema: () => sessionModeStateSchema,
   sessionNotificationSchema: () => sessionNotificationSchema,
+  setSessionModeRequestSchema: () => setSessionModeRequestSchema,
+  setSessionModeResponseSchema: () => setSessionModeResponseSchema,
+  stdioSchema: () => stdioSchema,
   terminalExitStatusSchema: () => terminalExitStatusSchema,
   terminalOutputRequestSchema: () => terminalOutputRequestSchema,
   terminalOutputResponseSchema: () => terminalOutputResponseSchema,
@@ -78,6 +96,7 @@ __export(acp_exports, {
   toolCallStatusSchema: () => toolCallStatusSchema,
   toolCallUpdateSchema: () => toolCallUpdateSchema,
   toolKindSchema: () => toolKindSchema,
+  unstructuredCommandInputSchema: () => unstructuredCommandInputSchema,
   waitForTerminalExitRequestSchema: () => waitForTerminalExitRequestSchema,
   waitForTerminalExitResponseSchema: () => waitForTerminalExitResponseSchema,
   writeTextFileRequestSchema: () => writeTextFileRequestSchema,
@@ -4133,7 +4152,8 @@ var AGENT_METHODS = {
   session_cancel: "session/cancel",
   session_load: "session/load",
   session_new: "session/new",
-  session_prompt: "session/prompt"
+  session_prompt: "session/prompt",
+  session_set_mode: "session/set_mode"
 };
 var CLIENT_METHODS = {
   fs_read_text_file: "fs/read_text_file",
@@ -4141,29 +4161,55 @@ var CLIENT_METHODS = {
   session_request_permission: "session/request_permission",
   session_update: "session/update",
   terminal_create: "terminal/create",
+  terminal_kill: "terminal/kill",
   terminal_output: "terminal/output",
   terminal_release: "terminal/release",
   terminal_wait_for_exit: "terminal/wait_for_exit"
 };
 var PROTOCOL_VERSION = 1;
 var writeTextFileRequestSchema = external_exports.object({
+  _meta: external_exports.record(external_exports.unknown()).optional(),
   content: external_exports.string(),
   path: external_exports.string(),
   sessionId: external_exports.string()
 });
 var readTextFileRequestSchema = external_exports.object({
+  _meta: external_exports.record(external_exports.unknown()).optional(),
   limit: external_exports.number().optional().nullable(),
   line: external_exports.number().optional().nullable(),
   path: external_exports.string(),
   sessionId: external_exports.string()
 });
+var terminalOutputRequestSchema = external_exports.object({
+  _meta: external_exports.record(external_exports.unknown()).optional(),
+  sessionId: external_exports.string(),
+  terminalId: external_exports.string()
+});
+var releaseTerminalRequestSchema = external_exports.object({
+  _meta: external_exports.record(external_exports.unknown()).optional(),
+  sessionId: external_exports.string(),
+  terminalId: external_exports.string()
+});
+var waitForTerminalExitRequestSchema = external_exports.object({
+  _meta: external_exports.record(external_exports.unknown()).optional(),
+  sessionId: external_exports.string(),
+  terminalId: external_exports.string()
+});
+var killTerminalCommandRequestSchema = external_exports.object({
+  _meta: external_exports.record(external_exports.unknown()).optional(),
+  sessionId: external_exports.string(),
+  terminalId: external_exports.string()
+});
+var extMethodRequestSchema = external_exports.record(external_exports.unknown());
 var roleSchema = external_exports.union([external_exports.literal("assistant"), external_exports.literal("user")]);
 var textResourceContentsSchema = external_exports.object({
+  _meta: external_exports.record(external_exports.unknown()).optional(),
   mimeType: external_exports.string().optional().nullable(),
   text: external_exports.string(),
   uri: external_exports.string()
 });
 var blobResourceContentsSchema = external_exports.object({
+  _meta: external_exports.record(external_exports.unknown()).optional(),
   blob: external_exports.string(),
   mimeType: external_exports.string().optional().nullable(),
   uri: external_exports.string()
@@ -4177,6 +4223,7 @@ var toolKindSchema = external_exports.union([
   external_exports.literal("execute"),
   external_exports.literal("think"),
   external_exports.literal("fetch"),
+  external_exports.literal("switch_mode"),
   external_exports.literal("other")
 ]);
 var toolCallStatusSchema = external_exports.union([
@@ -4185,12 +4232,15 @@ var toolCallStatusSchema = external_exports.union([
   external_exports.literal("completed"),
   external_exports.literal("failed")
 ]);
-var sessionIdSchema = external_exports.string();
-var writeTextFileResponseSchema = external_exports.null();
+var writeTextFileResponseSchema = external_exports.object({
+  _meta: external_exports.record(external_exports.unknown()).optional()
+});
 var readTextFileResponseSchema = external_exports.object({
+  _meta: external_exports.record(external_exports.unknown()).optional(),
   content: external_exports.string()
 });
 var requestPermissionResponseSchema = external_exports.object({
+  _meta: external_exports.record(external_exports.unknown()).optional(),
   outcome: external_exports.union([
     external_exports.object({
       outcome: external_exports.literal("cancelled")
@@ -4202,20 +4252,43 @@ var requestPermissionResponseSchema = external_exports.object({
   ])
 });
 var createTerminalResponseSchema = external_exports.object({
+  _meta: external_exports.record(external_exports.unknown()).optional(),
   terminalId: external_exports.string()
 });
-var releaseTerminalResponseSchema = external_exports.null();
+var releaseTerminalResponseSchema = external_exports.object({
+  _meta: external_exports.record(external_exports.unknown()).optional()
+});
 var waitForTerminalExitResponseSchema = external_exports.object({
+  _meta: external_exports.record(external_exports.unknown()).optional(),
   exitCode: external_exports.number().optional().nullable(),
   signal: external_exports.string().optional().nullable()
 });
+var killTerminalResponseSchema = external_exports.object({
+  _meta: external_exports.record(external_exports.unknown()).optional()
+});
+var extMethodResponseSchema = external_exports.record(external_exports.unknown());
 var cancelNotificationSchema = external_exports.object({
+  _meta: external_exports.record(external_exports.unknown()).optional(),
   sessionId: external_exports.string()
 });
+var extNotificationSchema = external_exports.record(external_exports.unknown());
 var authenticateRequestSchema = external_exports.object({
+  _meta: external_exports.record(external_exports.unknown()).optional(),
   methodId: external_exports.string()
 });
+var setSessionModeRequestSchema = external_exports.object({
+  _meta: external_exports.record(external_exports.unknown()).optional(),
+  modeId: external_exports.string(),
+  sessionId: external_exports.string()
+});
+var extMethodRequest1Schema = external_exports.record(external_exports.unknown());
+var httpHeaderSchema = external_exports.object({
+  _meta: external_exports.record(external_exports.unknown()).optional(),
+  name: external_exports.string(),
+  value: external_exports.string()
+});
 var annotationsSchema = external_exports.object({
+  _meta: external_exports.record(external_exports.unknown()).optional(),
   audience: external_exports.array(roleSchema).optional().nullable(),
   lastModified: external_exports.string().optional().nullable(),
   priority: external_exports.number().optional().nullable()
@@ -4224,12 +4297,14 @@ var embeddedResourceResourceSchema = external_exports.union([
   textResourceContentsSchema,
   blobResourceContentsSchema
 ]);
-var authenticateResponseSchema = external_exports.null();
-var newSessionResponseSchema = external_exports.object({
-  sessionId: external_exports.string()
+var authenticateResponseSchema = external_exports.object({
+  _meta: external_exports.record(external_exports.unknown()).optional()
 });
-var loadSessionResponseSchema = external_exports.null();
+var setSessionModeResponseSchema = external_exports.object({
+  meta: external_exports.unknown().optional()
+});
 var promptResponseSchema = external_exports.object({
+  _meta: external_exports.record(external_exports.unknown()).optional(),
   stopReason: external_exports.union([
     external_exports.literal("end_turn"),
     external_exports.literal("max_tokens"),
@@ -4238,7 +4313,14 @@ var promptResponseSchema = external_exports.object({
     external_exports.literal("cancelled")
   ])
 });
+var extMethodResponse1Schema = external_exports.record(external_exports.unknown());
+var sessionModeIdSchema = external_exports.string();
+var extNotification1Schema = external_exports.record(external_exports.unknown());
+var unstructuredCommandInputSchema = external_exports.object({
+  hint: external_exports.string()
+});
 var permissionOptionSchema = external_exports.object({
+  _meta: external_exports.record(external_exports.unknown()).optional(),
   kind: external_exports.union([
     external_exports.literal("allow_once"),
     external_exports.literal("allow_always"),
@@ -4252,11 +4334,13 @@ var toolCallContentSchema = external_exports.union([
   external_exports.object({
     content: external_exports.union([
       external_exports.object({
+        _meta: external_exports.record(external_exports.unknown()).optional(),
         annotations: annotationsSchema.optional().nullable(),
         text: external_exports.string(),
         type: external_exports.literal("text")
       }),
       external_exports.object({
+        _meta: external_exports.record(external_exports.unknown()).optional(),
         annotations: annotationsSchema.optional().nullable(),
         data: external_exports.string(),
         mimeType: external_exports.string(),
@@ -4264,12 +4348,14 @@ var toolCallContentSchema = external_exports.union([
         uri: external_exports.string().optional().nullable()
       }),
       external_exports.object({
+        _meta: external_exports.record(external_exports.unknown()).optional(),
         annotations: annotationsSchema.optional().nullable(),
         data: external_exports.string(),
         mimeType: external_exports.string(),
         type: external_exports.literal("audio")
       }),
       external_exports.object({
+        _meta: external_exports.record(external_exports.unknown()).optional(),
         annotations: annotationsSchema.optional().nullable(),
         description: external_exports.string().optional().nullable(),
         mimeType: external_exports.string().optional().nullable(),
@@ -4280,6 +4366,7 @@ var toolCallContentSchema = external_exports.union([
         uri: external_exports.string()
       }),
       external_exports.object({
+        _meta: external_exports.record(external_exports.unknown()).optional(),
         annotations: annotationsSchema.optional().nullable(),
         resource: embeddedResourceResourceSchema,
         type: external_exports.literal("resource")
@@ -4288,6 +4375,7 @@ var toolCallContentSchema = external_exports.union([
     type: external_exports.literal("content")
   }),
   external_exports.object({
+    _meta: external_exports.record(external_exports.unknown()).optional(),
     newText: external_exports.string(),
     oldText: external_exports.string().optional().nullable(),
     path: external_exports.string(),
@@ -4299,51 +4387,55 @@ var toolCallContentSchema = external_exports.union([
   })
 ]);
 var toolCallLocationSchema = external_exports.object({
+  _meta: external_exports.record(external_exports.unknown()).optional(),
   line: external_exports.number().optional().nullable(),
   path: external_exports.string()
 });
 var envVariableSchema = external_exports.object({
+  _meta: external_exports.record(external_exports.unknown()).optional(),
   name: external_exports.string(),
   value: external_exports.string()
 });
-var terminalOutputRequestSchema = external_exports.object({
-  sessionId: sessionIdSchema,
-  terminalId: external_exports.string()
-});
-var releaseTerminalRequestSchema = external_exports.object({
-  sessionId: sessionIdSchema,
-  terminalId: external_exports.string()
-});
-var waitForTerminalExitRequestSchema = external_exports.object({
-  sessionId: sessionIdSchema,
-  terminalId: external_exports.string()
-});
 var terminalExitStatusSchema = external_exports.object({
+  _meta: external_exports.record(external_exports.unknown()).optional(),
   exitCode: external_exports.number().optional().nullable(),
   signal: external_exports.string().optional().nullable()
 });
 var fileSystemCapabilitySchema = external_exports.object({
+  _meta: external_exports.record(external_exports.unknown()).optional(),
   readTextFile: external_exports.boolean().optional(),
   writeTextFile: external_exports.boolean().optional()
 });
-var mcpServerSchema = external_exports.object({
+var stdioSchema = external_exports.object({
   args: external_exports.array(external_exports.string()),
   command: external_exports.string(),
   env: external_exports.array(envVariableSchema),
   name: external_exports.string()
 });
-var loadSessionRequestSchema = external_exports.object({
-  cwd: external_exports.string(),
-  mcpServers: external_exports.array(mcpServerSchema),
-  sessionId: external_exports.string()
-});
+var mcpServerSchema = external_exports.union([
+  external_exports.object({
+    headers: external_exports.array(httpHeaderSchema),
+    name: external_exports.string(),
+    type: external_exports.literal("http"),
+    url: external_exports.string()
+  }),
+  external_exports.object({
+    headers: external_exports.array(httpHeaderSchema),
+    name: external_exports.string(),
+    type: external_exports.literal("sse"),
+    url: external_exports.string()
+  }),
+  stdioSchema
+]);
 var contentBlockSchema = external_exports.union([
   external_exports.object({
+    _meta: external_exports.record(external_exports.unknown()).optional(),
     annotations: annotationsSchema.optional().nullable(),
     text: external_exports.string(),
     type: external_exports.literal("text")
   }),
   external_exports.object({
+    _meta: external_exports.record(external_exports.unknown()).optional(),
     annotations: annotationsSchema.optional().nullable(),
     data: external_exports.string(),
     mimeType: external_exports.string(),
@@ -4351,12 +4443,14 @@ var contentBlockSchema = external_exports.union([
     uri: external_exports.string().optional().nullable()
   }),
   external_exports.object({
+    _meta: external_exports.record(external_exports.unknown()).optional(),
     annotations: annotationsSchema.optional().nullable(),
     data: external_exports.string(),
     mimeType: external_exports.string(),
     type: external_exports.literal("audio")
   }),
   external_exports.object({
+    _meta: external_exports.record(external_exports.unknown()).optional(),
     annotations: annotationsSchema.optional().nullable(),
     description: external_exports.string().optional().nullable(),
     mimeType: external_exports.string().optional().nullable(),
@@ -4367,22 +4461,42 @@ var contentBlockSchema = external_exports.union([
     uri: external_exports.string()
   }),
   external_exports.object({
+    _meta: external_exports.record(external_exports.unknown()).optional(),
     annotations: annotationsSchema.optional().nullable(),
     resource: embeddedResourceResourceSchema,
     type: external_exports.literal("resource")
   })
 ]);
 var authMethodSchema = external_exports.object({
+  _meta: external_exports.record(external_exports.unknown()).optional(),
   description: external_exports.string().optional().nullable(),
   id: external_exports.string(),
   name: external_exports.string()
 });
+var mcpCapabilitiesSchema = external_exports.object({
+  _meta: external_exports.record(external_exports.unknown()).optional(),
+  http: external_exports.boolean().optional(),
+  sse: external_exports.boolean().optional()
+});
 var promptCapabilitiesSchema = external_exports.object({
+  _meta: external_exports.record(external_exports.unknown()).optional(),
   audio: external_exports.boolean().optional(),
   embeddedContext: external_exports.boolean().optional(),
   image: external_exports.boolean().optional()
 });
+var sessionModeSchema = external_exports.object({
+  _meta: external_exports.record(external_exports.unknown()).optional(),
+  description: external_exports.string().optional().nullable(),
+  id: sessionModeIdSchema,
+  name: external_exports.string()
+});
+var sessionModeStateSchema = external_exports.object({
+  _meta: external_exports.record(external_exports.unknown()).optional(),
+  availableModes: external_exports.array(sessionModeSchema),
+  currentModeId: external_exports.string()
+});
 var planEntrySchema = external_exports.object({
+  _meta: external_exports.record(external_exports.unknown()).optional(),
   content: external_exports.string(),
   priority: external_exports.union([external_exports.literal("high"), external_exports.literal("medium"), external_exports.literal("low")]),
   status: external_exports.union([
@@ -4391,29 +4505,109 @@ var planEntrySchema = external_exports.object({
     external_exports.literal("completed")
   ])
 });
-var clientNotificationSchema = cancelNotificationSchema;
+var availableCommandInputSchema = unstructuredCommandInputSchema;
+var clientNotificationSchema = external_exports.union([
+  cancelNotificationSchema,
+  extNotificationSchema
+]);
 var createTerminalRequestSchema = external_exports.object({
+  _meta: external_exports.record(external_exports.unknown()).optional(),
   args: external_exports.array(external_exports.string()).optional(),
   command: external_exports.string(),
   cwd: external_exports.string().optional().nullable(),
   env: external_exports.array(envVariableSchema).optional(),
   outputByteLimit: external_exports.number().optional().nullable(),
-  sessionId: sessionIdSchema
+  sessionId: external_exports.string()
 });
 var terminalOutputResponseSchema = external_exports.object({
+  _meta: external_exports.record(external_exports.unknown()).optional(),
   exitStatus: terminalExitStatusSchema.optional().nullable(),
   output: external_exports.string(),
   truncated: external_exports.boolean()
 });
 var newSessionRequestSchema = external_exports.object({
+  _meta: external_exports.record(external_exports.unknown()).optional(),
   cwd: external_exports.string(),
   mcpServers: external_exports.array(mcpServerSchema)
 });
+var loadSessionRequestSchema = external_exports.object({
+  _meta: external_exports.record(external_exports.unknown()).optional(),
+  cwd: external_exports.string(),
+  mcpServers: external_exports.array(mcpServerSchema),
+  sessionId: external_exports.string()
+});
 var promptRequestSchema = external_exports.object({
+  _meta: external_exports.record(external_exports.unknown()).optional(),
   prompt: external_exports.array(contentBlockSchema),
   sessionId: external_exports.string()
 });
+var newSessionResponseSchema = external_exports.object({
+  _meta: external_exports.record(external_exports.unknown()).optional(),
+  modes: sessionModeStateSchema.optional().nullable(),
+  sessionId: external_exports.string()
+});
+var loadSessionResponseSchema = external_exports.object({
+  _meta: external_exports.record(external_exports.unknown()).optional(),
+  modes: sessionModeStateSchema.optional().nullable()
+});
+var toolCallUpdateSchema = external_exports.object({
+  _meta: external_exports.record(external_exports.unknown()).optional(),
+  content: external_exports.array(toolCallContentSchema).optional().nullable(),
+  kind: toolKindSchema.optional().nullable(),
+  locations: external_exports.array(toolCallLocationSchema).optional().nullable(),
+  rawInput: external_exports.record(external_exports.unknown()).optional(),
+  rawOutput: external_exports.record(external_exports.unknown()).optional(),
+  status: toolCallStatusSchema.optional().nullable(),
+  title: external_exports.string().optional().nullable(),
+  toolCallId: external_exports.string()
+});
+var clientCapabilitiesSchema = external_exports.object({
+  _meta: external_exports.record(external_exports.unknown()).optional(),
+  fs: fileSystemCapabilitySchema.optional(),
+  terminal: external_exports.boolean().optional()
+});
+var agentCapabilitiesSchema = external_exports.object({
+  _meta: external_exports.record(external_exports.unknown()).optional(),
+  loadSession: external_exports.boolean().optional(),
+  mcpCapabilities: mcpCapabilitiesSchema.optional(),
+  promptCapabilities: promptCapabilitiesSchema.optional()
+});
+var availableCommandSchema = external_exports.object({
+  _meta: external_exports.record(external_exports.unknown()).optional(),
+  description: external_exports.string(),
+  input: availableCommandInputSchema.optional().nullable(),
+  name: external_exports.string()
+});
+var clientResponseSchema = external_exports.union([
+  writeTextFileResponseSchema,
+  readTextFileResponseSchema,
+  requestPermissionResponseSchema,
+  createTerminalResponseSchema,
+  terminalOutputResponseSchema,
+  releaseTerminalResponseSchema,
+  waitForTerminalExitResponseSchema,
+  killTerminalResponseSchema,
+  extMethodResponseSchema
+]);
+var requestPermissionRequestSchema = external_exports.object({
+  _meta: external_exports.record(external_exports.unknown()).optional(),
+  options: external_exports.array(permissionOptionSchema),
+  sessionId: external_exports.string(),
+  toolCall: toolCallUpdateSchema
+});
+var initializeRequestSchema = external_exports.object({
+  _meta: external_exports.record(external_exports.unknown()).optional(),
+  clientCapabilities: clientCapabilitiesSchema.optional(),
+  protocolVersion: external_exports.number()
+});
+var initializeResponseSchema = external_exports.object({
+  _meta: external_exports.record(external_exports.unknown()).optional(),
+  agentCapabilities: agentCapabilitiesSchema.optional(),
+  authMethods: external_exports.array(authMethodSchema).optional(),
+  protocolVersion: external_exports.number()
+});
 var sessionNotificationSchema = external_exports.object({
+  _meta: external_exports.record(external_exports.unknown()).optional(),
   sessionId: external_exports.string(),
   update: external_exports.union([
     external_exports.object({
@@ -4429,6 +4623,7 @@ var sessionNotificationSchema = external_exports.object({
       sessionUpdate: external_exports.literal("agent_thought_chunk")
     }),
     external_exports.object({
+      _meta: external_exports.record(external_exports.unknown()).optional(),
       content: external_exports.array(toolCallContentSchema).optional(),
       kind: external_exports.union([
         external_exports.literal("read"),
@@ -4439,6 +4634,7 @@ var sessionNotificationSchema = external_exports.object({
         external_exports.literal("execute"),
         external_exports.literal("think"),
         external_exports.literal("fetch"),
+        external_exports.literal("switch_mode"),
         external_exports.literal("other")
       ]).optional(),
       locations: external_exports.array(toolCallLocationSchema).optional(),
@@ -4455,6 +4651,7 @@ var sessionNotificationSchema = external_exports.object({
       toolCallId: external_exports.string()
     }),
     external_exports.object({
+      _meta: external_exports.record(external_exports.unknown()).optional(),
       content: external_exports.array(toolCallContentSchema).optional().nullable(),
       kind: toolKindSchema.optional().nullable(),
       locations: external_exports.array(toolCallLocationSchema).optional().nullable(),
@@ -4466,52 +4663,19 @@ var sessionNotificationSchema = external_exports.object({
       toolCallId: external_exports.string()
     }),
     external_exports.object({
+      _meta: external_exports.record(external_exports.unknown()).optional(),
       entries: external_exports.array(planEntrySchema),
       sessionUpdate: external_exports.literal("plan")
+    }),
+    external_exports.object({
+      availableCommands: external_exports.array(availableCommandSchema),
+      sessionUpdate: external_exports.literal("available_commands_update")
+    }),
+    external_exports.object({
+      currentModeId: sessionModeIdSchema,
+      sessionUpdate: external_exports.literal("current_mode_update")
     })
   ])
-});
-var toolCallUpdateSchema = external_exports.object({
-  content: external_exports.array(toolCallContentSchema).optional().nullable(),
-  kind: toolKindSchema.optional().nullable(),
-  locations: external_exports.array(toolCallLocationSchema).optional().nullable(),
-  rawInput: external_exports.record(external_exports.unknown()).optional(),
-  rawOutput: external_exports.record(external_exports.unknown()).optional(),
-  status: toolCallStatusSchema.optional().nullable(),
-  title: external_exports.string().optional().nullable(),
-  toolCallId: external_exports.string()
-});
-var clientCapabilitiesSchema = external_exports.object({
-  fs: fileSystemCapabilitySchema.optional(),
-  terminal: external_exports.boolean().optional()
-});
-var agentCapabilitiesSchema = external_exports.object({
-  loadSession: external_exports.boolean().optional(),
-  promptCapabilities: promptCapabilitiesSchema.optional()
-});
-var clientResponseSchema = external_exports.union([
-  writeTextFileResponseSchema,
-  readTextFileResponseSchema,
-  requestPermissionResponseSchema,
-  createTerminalResponseSchema,
-  terminalOutputResponseSchema,
-  releaseTerminalResponseSchema,
-  waitForTerminalExitResponseSchema
-]);
-var agentNotificationSchema = sessionNotificationSchema;
-var requestPermissionRequestSchema = external_exports.object({
-  options: external_exports.array(permissionOptionSchema),
-  sessionId: external_exports.string(),
-  toolCall: toolCallUpdateSchema
-});
-var initializeRequestSchema = external_exports.object({
-  clientCapabilities: clientCapabilitiesSchema.optional(),
-  protocolVersion: external_exports.number()
-});
-var initializeResponseSchema = external_exports.object({
-  agentCapabilities: agentCapabilitiesSchema.optional(),
-  authMethods: external_exports.array(authMethodSchema).optional(),
-  protocolVersion: external_exports.number()
 });
 var clientRequestSchema = external_exports.union([
   writeTextFileRequestSchema,
@@ -4520,21 +4684,31 @@ var clientRequestSchema = external_exports.union([
   createTerminalRequestSchema,
   terminalOutputRequestSchema,
   releaseTerminalRequestSchema,
-  waitForTerminalExitRequestSchema
+  waitForTerminalExitRequestSchema,
+  killTerminalCommandRequestSchema,
+  extMethodRequestSchema
 ]);
 var agentRequestSchema = external_exports.union([
   initializeRequestSchema,
   authenticateRequestSchema,
   newSessionRequestSchema,
   loadSessionRequestSchema,
-  promptRequestSchema
+  setSessionModeRequestSchema,
+  promptRequestSchema,
+  extMethodRequest1Schema
 ]);
 var agentResponseSchema = external_exports.union([
   initializeResponseSchema,
   authenticateResponseSchema,
   newSessionResponseSchema,
   loadSessionResponseSchema,
-  promptResponseSchema
+  setSessionModeResponseSchema,
+  promptResponseSchema,
+  extMethodResponse1Schema
+]);
+var agentNotificationSchema = external_exports.union([
+  sessionNotificationSchema,
+  extNotification1Schema
 ]);
 var agentClientProtocolSchema = external_exports.union([
   clientRequestSchema,
@@ -4544,6 +4718,62 @@ var agentClientProtocolSchema = external_exports.union([
   agentResponseSchema,
   agentNotificationSchema
 ]);
+
+// typescript/stream.ts
+function ndJsonStream(output, input) {
+  const textEncoder = new TextEncoder();
+  const textDecoder = new TextDecoder();
+  const readable = new ReadableStream({
+    async start(controller) {
+      let content = "";
+      const reader = input.getReader();
+      try {
+        while (true) {
+          const { value, done } = await reader.read();
+          if (done) {
+            break;
+          }
+          if (!value) {
+            continue;
+          }
+          content += textDecoder.decode(value, { stream: true });
+          const lines = content.split("\n");
+          content = lines.pop() || "";
+          for (const line of lines) {
+            const trimmedLine = line.trim();
+            if (trimmedLine) {
+              try {
+                const message = JSON.parse(trimmedLine);
+                controller.enqueue(message);
+              } catch (err) {
+                console.error(
+                  "Failed to parse JSON message:",
+                  trimmedLine,
+                  err
+                );
+              }
+            }
+          }
+        }
+      } finally {
+        reader.releaseLock();
+        controller.close();
+      }
+    }
+  });
+  const writable = new WritableStream({
+    async write(message) {
+      const content = JSON.stringify(message) + "\n";
+      const writer = output.getWriter();
+      try {
+        await writer.write(textEncoder.encode(content));
+      } finally {
+        writer.releaseLock();
+      }
+    }
+  });
+  return { readable, writable };
+}
 
 // typescript/acp.ts
 var AgentSideConnection = class {
@@ -4555,14 +4785,14 @@ var AgentSideConnection = class {
    * following the ACP specification.
    *
    * @param toAgent - A function that creates an Agent handler to process incoming client requests
-   * @param input - The stream for sending data to the client (typically stdout)
-   * @param output - The stream for receiving data from the client (typically stdin)
+   * @param stream - The bidirectional message stream for communication. Typically created using
+   *                 {@link ndJsonStream} for stdio-based connections.
    *
    * See protocol docs: [Communication Model](https://agentclientprotocol.com/protocol/overview#communication-model)
    */
-  constructor(toAgent, input, output) {
+  constructor(toAgent, stream) {
     const agent = toAgent(this);
-    const handler = async (method, params) => {
+    const requestHandler = async (method, params) => {
       switch (method) {
         case AGENT_METHODS.initialize: {
           const validatedParams = initializeRequestSchema.parse(params);
@@ -4581,25 +4811,64 @@ var AgentSideConnection = class {
             validatedParams
           );
         }
-        case AGENT_METHODS.authenticate: {
-          const validatedParams = authenticateRequestSchema.parse(params);
-          return agent.authenticate(
+        case AGENT_METHODS.session_set_mode: {
+          if (!agent.setSessionMode) {
+            throw RequestError.methodNotFound(method);
+          }
+          const validatedParams = setSessionModeRequestSchema.parse(params);
+          const result = await agent.setSessionMode(
             validatedParams
           );
+          return result ?? {};
+        }
+        case AGENT_METHODS.authenticate: {
+          const validatedParams = authenticateRequestSchema.parse(params);
+          const result = await agent.authenticate(
+            validatedParams
+          );
+          return result ?? {};
         }
         case AGENT_METHODS.session_prompt: {
           const validatedParams = promptRequestSchema.parse(params);
           return agent.prompt(validatedParams);
         }
+        default:
+          if (method.startsWith("_")) {
+            if (!agent.extMethod) {
+              throw RequestError.methodNotFound(method);
+            }
+            return agent.extMethod(
+              method.substring(1),
+              params
+            );
+          }
+          throw RequestError.methodNotFound(method);
+      }
+    };
+    const notificationHandler = async (method, params) => {
+      switch (method) {
         case AGENT_METHODS.session_cancel: {
           const validatedParams = cancelNotificationSchema.parse(params);
           return agent.cancel(validatedParams);
         }
         default:
+          if (method.startsWith("_")) {
+            if (!agent.extNotification) {
+              return;
+            }
+            return agent.extNotification(
+              method.substring(1),
+              params
+            );
+          }
           throw RequestError.methodNotFound(method);
       }
     };
-    this.#connection = new Connection(handler, input, output);
+    this.#connection = new Connection(
+      requestHandler,
+      notificationHandler,
+      stream
+    );
   }
   /**
    * Handles session update notifications from the agent.
@@ -4664,12 +4933,19 @@ var AgentSideConnection = class {
     return await this.#connection.sendRequest(
       CLIENT_METHODS.fs_write_text_file,
       params
-    );
+    ) ?? {};
   }
   /**
-   *  @internal **UNSTABLE**
+   * Executes a command in a new terminal.
    *
-   * This method is not part of the spec, and may be removed or changed at any point.
+   * Returns a `TerminalHandle` that can be used to get output, wait for exit,
+   * kill the command, or release the terminal.
+   *
+   * The terminal can also be embedded in tool calls by using its ID in
+   * `ToolCallContent` with type "terminal".
+   *
+   * @param params - The terminal creation parameters
+   * @returns A handle to control and monitor the terminal
    */
   async createTerminal(params) {
     const response = await this.#connection.sendRequest(
@@ -4682,6 +4958,22 @@ var AgentSideConnection = class {
       this.#connection
     );
   }
+  /**
+   * Extension method
+   *
+   * Allows the Agent to send an arbitrary request that is not part of the ACP spec.
+   */
+  async extMethod(method, params) {
+    return await this.#connection.sendRequest(`_${method}`, params);
+  }
+  /**
+   * Extension notification
+   *
+   * Allows the Agent to send an arbitrary notification that is not part of the ACP spec.
+   */
+  async extNotification(method, params) {
+    return await this.#connection.sendNotification(`_${method}`, params);
+  }
 };
 var TerminalHandle = class {
   constructor(id, sessionId, conn) {
@@ -4691,6 +4983,9 @@ var TerminalHandle = class {
   }
   #sessionId;
   #connection;
+  /**
+   * Gets the current terminal output without waiting for the command to exit.
+   */
   async currentOutput() {
     return await this.#connection.sendRequest(
       CLIENT_METHODS.terminal_output,
@@ -4700,6 +4995,9 @@ var TerminalHandle = class {
       }
     );
   }
+  /**
+   * Waits for the terminal command to complete and returns its exit status.
+   */
   async waitForExit() {
     return await this.#connection.sendRequest(
       CLIENT_METHODS.terminal_wait_for_exit,
@@ -4709,11 +5007,42 @@ var TerminalHandle = class {
       }
     );
   }
-  async release() {
-    await this.#connection.sendRequest(CLIENT_METHODS.terminal_release, {
+  /**
+   * Kills the terminal command without releasing the terminal.
+   *
+   * The terminal remains valid after killing, allowing you to:
+   * - Get the final output with `currentOutput()`
+   * - Check the exit status
+   * - Release the terminal when done
+   *
+   * Useful for implementing timeouts or cancellation.
+   */
+  async kill() {
+    return await this.#connection.sendRequest(CLIENT_METHODS.terminal_kill, {
       sessionId: this.#sessionId,
       terminalId: this.id
-    });
+    }) ?? {};
+  }
+  /**
+   * Releases the terminal and frees all associated resources.
+   *
+   * If the command is still running, it will be killed.
+   * After release, the terminal ID becomes invalid and cannot be used
+   * with other terminal methods.
+   *
+   * Tool calls that already reference this terminal will continue to
+   * display its output.
+   *
+   * **Important:** Always call this method when done with the terminal.
+   */
+  async release() {
+    return await this.#connection.sendRequest(
+      CLIENT_METHODS.terminal_release,
+      {
+        sessionId: this.#sessionId,
+        terminalId: this.id
+      }
+    ) ?? {};
   }
   async [Symbol.asyncDispose]() {
     await this.release();
@@ -4728,14 +5057,14 @@ var ClientSideConnection = class {
    * following the ACP specification.
    *
    * @param toClient - A function that creates a Client handler to process incoming agent requests
-   * @param input - The stream for sending data to the agent (typically stdout)
-   * @param output - The stream for receiving data from the agent (typically stdin)
+   * @param stream - The bidirectional message stream for communication. Typically created using
+   *                 {@link ndJsonStream} for stdio-based connections.
    *
    * See protocol docs: [Communication Model](https://agentclientprotocol.com/protocol/overview#communication-model)
    */
-  constructor(toClient, input, output) {
-    const handler = async (method, params) => {
-      const client = toClient(this);
+  constructor(toClient, stream) {
+    const client = toClient(this);
+    const requestHandler = async (method, params) => {
       switch (method) {
         case CLIENT_METHODS.fs_write_text_file: {
           const validatedParams = writeTextFileRequestSchema.parse(params);
@@ -4755,12 +5084,6 @@ var ClientSideConnection = class {
             validatedParams
           );
         }
-        case CLIENT_METHODS.session_update: {
-          const validatedParams = sessionNotificationSchema.parse(params);
-          return client.sessionUpdate(
-            validatedParams
-          );
-        }
         case CLIENT_METHODS.terminal_create: {
           const validatedParams = createTerminalRequestSchema.parse(params);
           return client.createTerminal?.(
@@ -4775,9 +5098,10 @@ var ClientSideConnection = class {
         }
         case CLIENT_METHODS.terminal_release: {
           const validatedParams = releaseTerminalRequestSchema.parse(params);
-          return client.releaseTerminal?.(
+          const result = await client.releaseTerminal?.(
             validatedParams
           );
+          return result ?? {};
         }
         case CLIENT_METHODS.terminal_wait_for_exit: {
           const validatedParams = waitForTerminalExitRequestSchema.parse(params);
@@ -4785,11 +5109,54 @@ var ClientSideConnection = class {
             validatedParams
           );
         }
+        case CLIENT_METHODS.terminal_kill: {
+          const validatedParams = killTerminalCommandRequestSchema.parse(params);
+          const result = await client.killTerminal?.(
+            validatedParams
+          );
+          return result ?? {};
+        }
         default:
+          if (method.startsWith("_")) {
+            const customMethod = method.substring(1);
+            if (!client.extMethod) {
+              throw RequestError.methodNotFound(method);
+            }
+            return client.extMethod(
+              customMethod,
+              params
+            );
+          }
           throw RequestError.methodNotFound(method);
       }
     };
-    this.#connection = new Connection(handler, input, output);
+    const notificationHandler = async (method, params) => {
+      switch (method) {
+        case CLIENT_METHODS.session_update: {
+          const validatedParams = sessionNotificationSchema.parse(params);
+          return client.sessionUpdate(
+            validatedParams
+          );
+        }
+        default:
+          if (method.startsWith("_")) {
+            const customMethod = method.substring(1);
+            if (!client.extNotification) {
+              return;
+            }
+            return client.extNotification(
+              customMethod,
+              params
+            );
+          }
+          throw RequestError.methodNotFound(method);
+      }
+    };
+    this.#connection = new Connection(
+      requestHandler,
+      notificationHandler,
+      stream
+    );
   }
   /**
    * Establishes the connection with a client and negotiates protocol capabilities.
@@ -4842,10 +5209,31 @@ var ClientSideConnection = class {
    * See protocol docs: [Loading Sessions](https://agentclientprotocol.com/protocol/session-setup#loading-sessions)
    */
   async loadSession(params) {
-    await this.#connection.sendRequest(
+    return await this.#connection.sendRequest(
       AGENT_METHODS.session_load,
       params
-    );
+    ) ?? {};
+  }
+  /**
+   * Sets the operational mode for a session.
+   *
+   * Allows switching between different agent modes (e.g., "ask", "architect", "code")
+   * that affect system prompts, tool availability, and permission behaviors.
+   *
+   * The mode must be one of the modes advertised in `availableModes` during session
+   * creation or loading. Agents may also change modes autonomously and notify the
+   * client via `current_mode_update` notifications.
+   *
+   * This method can be called at any time during a session, whether the Agent is
+   * idle or actively generating a turn.
+   *
+   * See protocol docs: [Session Modes](https://agentclientprotocol.com/protocol/session-modes)
+   */
+  async setSessionMode(params) {
+    return await this.#connection.sendRequest(
+      AGENT_METHODS.session_set_mode,
+      params
+    ) ?? {};
   }
   /**
    * Authenticates the client using the specified authentication method.
@@ -4862,7 +5250,7 @@ var ClientSideConnection = class {
     return await this.#connection.sendRequest(
       AGENT_METHODS.authenticate,
       params
-    );
+    ) ?? {};
   }
   /**
    * Processes a user prompt within a session.
@@ -4902,59 +5290,74 @@ var ClientSideConnection = class {
       params
     );
   }
+  /**
+   * Extension method
+   *
+   * Allows the Client to send an arbitrary request that is not part of the ACP spec.
+   */
+  async extMethod(method, params) {
+    return await this.#connection.sendRequest(`_${method}`, params);
+  }
+  /**
+   * Extension notification
+   *
+   * Allows the Client to send an arbitrary notification that is not part of the ACP spec.
+   */
+  async extNotification(method, params) {
+    return await this.#connection.sendNotification(`_${method}`, params);
+  }
 };
 var Connection = class {
   #pendingResponses = /* @__PURE__ */ new Map();
   #nextRequestId = 0;
-  #handler;
-  #peerInput;
+  #requestHandler;
+  #notificationHandler;
+  #stream;
   #writeQueue = Promise.resolve();
-  #textEncoder;
-  constructor(handler, peerInput, peerOutput) {
-    this.#handler = handler;
-    this.#peerInput = peerInput;
-    this.#textEncoder = new TextEncoder();
-    this.#receive(peerOutput);
+  constructor(requestHandler, notificationHandler, stream) {
+    this.#requestHandler = requestHandler;
+    this.#notificationHandler = notificationHandler;
+    this.#stream = stream;
+    this.#receive();
   }
-  async #receive(output) {
-    let content = "";
-    const decoder = new TextDecoder();
-    for await (const chunk of output) {
-      content += decoder.decode(chunk, { stream: true });
-      const lines = content.split("\n");
-      content = lines.pop() || "";
-      for (const line of lines) {
-        const trimmedLine = line.trim();
-        if (trimmedLine) {
-          let id;
-          try {
-            const message = JSON.parse(trimmedLine);
-            id = message.id;
-            this.#processMessage(message);
-          } catch (err) {
-            console.error(
-              "Unexpected error during message processing:",
-              trimmedLine,
-              err
-            );
-            if (id) {
-              this.#sendMessage({
-                jsonrpc: "2.0",
-                id,
-                error: {
-                  code: -32700,
-                  message: "Parse error"
-                }
-              });
-            }
+  async #receive() {
+    const reader = this.#stream.readable.getReader();
+    try {
+      while (true) {
+        const { value: message, done } = await reader.read();
+        if (done) {
+          break;
+        }
+        if (!message) {
+          continue;
+        }
+        try {
+          this.#processMessage(message);
+        } catch (err) {
+          console.error(
+            "Unexpected error during message processing:",
+            message,
+            err
+          );
+          if ("id" in message && message.id !== void 0) {
+            this.#sendMessage({
+              jsonrpc: "2.0",
+              id: message.id,
+              error: {
+                code: -32700,
+                message: "Parse error"
+              }
+            });
           }
         }
       }
+    } finally {
+      reader.releaseLock();
     }
   }
   async #processMessage(message) {
     if ("method" in message && "id" in message) {
-      const response = await this.#tryCallHandler(
+      const response = await this.#tryCallRequestHandler(
         message.method,
         message.params
       );
@@ -4967,7 +5370,7 @@ var Connection = class {
         ...response
       });
     } else if ("method" in message) {
-      const response = await this.#tryCallHandler(
+      const response = await this.#tryCallNotificationHandler(
         message.method,
         message.params
       );
@@ -4980,10 +5383,36 @@ var Connection = class {
       console.error("Invalid message", { message });
     }
   }
-  async #tryCallHandler(method, params) {
+  async #tryCallRequestHandler(method, params) {
     try {
-      const result = await this.#handler(method, params);
+      const result = await this.#requestHandler(method, params);
       return { result: result ?? null };
+    } catch (error) {
+      if (error instanceof RequestError) {
+        return error.toResult();
+      }
+      if (error instanceof external_exports.ZodError) {
+        return RequestError.invalidParams(error.format()).toResult();
+      }
+      let details;
+      if (error instanceof Error) {
+        details = error.message;
+      } else if (typeof error === "object" && error != null && "message" in error && typeof error.message === "string") {
+        details = error.message;
+      }
+      try {
+        return RequestError.internalError(
+          details ? JSON.parse(details) : {}
+        ).toResult();
+      } catch (_err) {
+        return RequestError.internalError({ details }).toResult();
+      }
+    }
+  }
+  async #tryCallNotificationHandler(method, params) {
+    try {
+      await this.#notificationHandler(method, params);
+      return { result: null };
     } catch (error) {
       if (error instanceof RequestError) {
         return error.toResult();
@@ -5030,12 +5459,11 @@ var Connection = class {
   async sendNotification(method, params) {
     await this.#sendMessage({ jsonrpc: "2.0", method, params });
   }
-  async #sendMessage(json) {
-    const content = JSON.stringify(json) + "\n";
+  async #sendMessage(message) {
     this.#writeQueue = this.#writeQueue.then(async () => {
-      const writer = this.#peerInput.getWriter();
+      const writer = this.#stream.writable.getWriter();
       try {
-        await writer.write(this.#textEncoder.encode(content));
+        await writer.write(message);
       } finally {
         writer.releaseLock();
       }
@@ -5124,6 +5552,8 @@ var RequestError = class _RequestError extends Error {
   authMethodSchema,
   authenticateRequestSchema,
   authenticateResponseSchema,
+  availableCommandInputSchema,
+  availableCommandSchema,
   blobResourceContentsSchema,
   cancelNotificationSchema,
   clientCapabilitiesSchema,
@@ -5135,12 +5565,23 @@ var RequestError = class _RequestError extends Error {
   createTerminalResponseSchema,
   embeddedResourceResourceSchema,
   envVariableSchema,
+  extMethodRequest1Schema,
+  extMethodRequestSchema,
+  extMethodResponse1Schema,
+  extMethodResponseSchema,
+  extNotification1Schema,
+  extNotificationSchema,
   fileSystemCapabilitySchema,
+  httpHeaderSchema,
   initializeRequestSchema,
   initializeResponseSchema,
+  killTerminalCommandRequestSchema,
+  killTerminalResponseSchema,
   loadSessionRequestSchema,
   loadSessionResponseSchema,
+  mcpCapabilitiesSchema,
   mcpServerSchema,
+  ndJsonStream,
   newSessionRequestSchema,
   newSessionResponseSchema,
   permissionOptionSchema,
@@ -5155,8 +5596,13 @@ var RequestError = class _RequestError extends Error {
   requestPermissionRequestSchema,
   requestPermissionResponseSchema,
   roleSchema,
-  sessionIdSchema,
+  sessionModeIdSchema,
+  sessionModeSchema,
+  sessionModeStateSchema,
   sessionNotificationSchema,
+  setSessionModeRequestSchema,
+  setSessionModeResponseSchema,
+  stdioSchema,
   terminalExitStatusSchema,
   terminalOutputRequestSchema,
   terminalOutputResponseSchema,
@@ -5166,6 +5612,7 @@ var RequestError = class _RequestError extends Error {
   toolCallStatusSchema,
   toolCallUpdateSchema,
   toolKindSchema,
+  unstructuredCommandInputSchema,
   waitForTerminalExitRequestSchema,
   waitForTerminalExitResponseSchema,
   writeTextFileRequestSchema,
