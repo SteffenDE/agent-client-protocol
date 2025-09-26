@@ -61,6 +61,7 @@ __export(schema_exports, {
   loadSessionResponseSchema: () => loadSessionResponseSchema,
   mcpCapabilitiesSchema: () => mcpCapabilitiesSchema,
   mcpServerSchema: () => mcpServerSchema,
+  modelInfoSchema: () => modelInfoSchema,
   newSessionRequestSchema: () => newSessionRequestSchema,
   newSessionResponseSchema: () => newSessionResponseSchema,
   permissionOptionSchema: () => permissionOptionSchema,
@@ -78,9 +79,12 @@ __export(schema_exports, {
   sessionModeIdSchema: () => sessionModeIdSchema,
   sessionModeSchema: () => sessionModeSchema,
   sessionModeStateSchema: () => sessionModeStateSchema,
+  sessionModelStateSchema: () => sessionModelStateSchema,
   sessionNotificationSchema: () => sessionNotificationSchema,
   setSessionModeRequestSchema: () => setSessionModeRequestSchema,
   setSessionModeResponseSchema: () => setSessionModeResponseSchema,
+  setSessionModelRequestSchema: () => setSessionModelRequestSchema,
+  setSessionModelResponseSchema: () => setSessionModelResponseSchema,
   stdioSchema: () => stdioSchema,
   terminalExitStatusSchema: () => terminalExitStatusSchema,
   terminalOutputRequestSchema: () => terminalOutputRequestSchema,
@@ -4144,6 +4148,7 @@ var NEVER = INVALID;
 var AGENT_METHODS = {
   authenticate: "authenticate",
   initialize: "initialize",
+  model_select: "session/set_model",
   session_cancel: "session/cancel",
   session_load: "session/load",
   session_new: "session/new",
@@ -4276,6 +4281,11 @@ var setSessionModeRequestSchema = external_exports.object({
   modeId: external_exports.string(),
   sessionId: external_exports.string()
 });
+var setSessionModelRequestSchema = external_exports.object({
+  _meta: external_exports.record(external_exports.unknown()).optional(),
+  modelId: external_exports.string(),
+  sessionId: external_exports.string()
+});
 var extMethodRequest1Schema = external_exports.record(external_exports.unknown());
 var httpHeaderSchema = external_exports.object({
   _meta: external_exports.record(external_exports.unknown()).optional(),
@@ -4307,6 +4317,9 @@ var promptResponseSchema = external_exports.object({
     external_exports.literal("refusal"),
     external_exports.literal("cancelled")
   ])
+});
+var setSessionModelResponseSchema = external_exports.object({
+  _meta: external_exports.record(external_exports.unknown()).optional()
 });
 var extMethodResponse1Schema = external_exports.record(external_exports.unknown());
 var sessionModeIdSchema = external_exports.string();
@@ -4479,11 +4492,22 @@ var promptCapabilitiesSchema = external_exports.object({
   embeddedContext: external_exports.boolean().optional(),
   image: external_exports.boolean().optional()
 });
+var modelInfoSchema = external_exports.object({
+  _meta: external_exports.record(external_exports.unknown()).optional(),
+  description: external_exports.string().optional().nullable(),
+  modelId: external_exports.string(),
+  name: external_exports.string()
+});
 var sessionModeSchema = external_exports.object({
   _meta: external_exports.record(external_exports.unknown()).optional(),
   description: external_exports.string().optional().nullable(),
   id: sessionModeIdSchema,
   name: external_exports.string()
+});
+var sessionModelStateSchema = external_exports.object({
+  _meta: external_exports.record(external_exports.unknown()).optional(),
+  availableModels: external_exports.array(modelInfoSchema),
+  currentModelId: external_exports.string()
 });
 var sessionModeStateSchema = external_exports.object({
   _meta: external_exports.record(external_exports.unknown()).optional(),
@@ -4538,11 +4562,13 @@ var promptRequestSchema = external_exports.object({
 });
 var newSessionResponseSchema = external_exports.object({
   _meta: external_exports.record(external_exports.unknown()).optional(),
+  models: sessionModelStateSchema.optional().nullable(),
   modes: sessionModeStateSchema.optional().nullable(),
   sessionId: external_exports.string()
 });
 var loadSessionResponseSchema = external_exports.object({
   _meta: external_exports.record(external_exports.unknown()).optional(),
+  models: sessionModelStateSchema.optional().nullable(),
   modes: sessionModeStateSchema.optional().nullable()
 });
 var toolCallUpdateSchema = external_exports.object({
@@ -4690,6 +4716,7 @@ var agentRequestSchema = external_exports.union([
   loadSessionRequestSchema,
   setSessionModeRequestSchema,
   promptRequestSchema,
+  setSessionModelRequestSchema,
   extMethodRequest1Schema
 ]);
 var agentResponseSchema = external_exports.union([
@@ -4699,6 +4726,7 @@ var agentResponseSchema = external_exports.union([
   loadSessionResponseSchema,
   setSessionModeResponseSchema,
   promptResponseSchema,
+  setSessionModelResponseSchema,
   extMethodResponse1Schema
 ]);
 var agentNotificationSchema = external_exports.union([
@@ -4756,6 +4784,7 @@ var agentClientProtocolSchema = external_exports.union([
   loadSessionResponseSchema,
   mcpCapabilitiesSchema,
   mcpServerSchema,
+  modelInfoSchema,
   newSessionRequestSchema,
   newSessionResponseSchema,
   permissionOptionSchema,
@@ -4773,9 +4802,12 @@ var agentClientProtocolSchema = external_exports.union([
   sessionModeIdSchema,
   sessionModeSchema,
   sessionModeStateSchema,
+  sessionModelStateSchema,
   sessionNotificationSchema,
   setSessionModeRequestSchema,
   setSessionModeResponseSchema,
+  setSessionModelRequestSchema,
+  setSessionModelResponseSchema,
   stdioSchema,
   terminalExitStatusSchema,
   terminalOutputRequestSchema,

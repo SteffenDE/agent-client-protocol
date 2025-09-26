@@ -41,6 +41,7 @@ import {
   loadSessionResponseSchema,
   mcpCapabilitiesSchema,
   mcpServerSchema,
+  modelInfoSchema,
   newSessionRequestSchema,
   newSessionResponseSchema,
   permissionOptionSchema,
@@ -58,9 +59,12 @@ import {
   sessionModeIdSchema,
   sessionModeSchema,
   sessionModeStateSchema,
+  sessionModelStateSchema,
   sessionNotificationSchema,
   setSessionModeRequestSchema,
   setSessionModeResponseSchema,
+  setSessionModelRequestSchema,
+  setSessionModelResponseSchema,
   stdioSchema,
   terminalExitStatusSchema,
   terminalOutputRequestSchema,
@@ -76,7 +80,7 @@ import {
   waitForTerminalExitResponseSchema,
   writeTextFileRequestSchema,
   writeTextFileResponseSchema
-} from "./chunk-GOJNWGAH.js";
+} from "./chunk-FQ2WJCQV.js";
 
 // typescript/stream.ts
 function ndJsonStream(output, input) {
@@ -939,6 +943,7 @@ export {
   loadSessionResponseSchema,
   mcpCapabilitiesSchema,
   mcpServerSchema,
+  modelInfoSchema,
   ndJsonStream,
   newSessionRequestSchema,
   newSessionResponseSchema,
@@ -957,9 +962,12 @@ export {
   sessionModeIdSchema,
   sessionModeSchema,
   sessionModeStateSchema,
+  sessionModelStateSchema,
   sessionNotificationSchema,
   setSessionModeRequestSchema,
   setSessionModeResponseSchema,
+  setSessionModelRequestSchema,
+  setSessionModelResponseSchema,
   stdioSchema,
   terminalExitStatusSchema,
   terminalOutputRequestSchema,

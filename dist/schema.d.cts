@@ -3,6 +3,7 @@ import { z } from 'zod';
 declare const AGENT_METHODS: {
     readonly authenticate: "authenticate";
     readonly initialize: "initialize";
+    readonly model_select: "session/set_model";
     readonly session_cancel: "session/cancel";
     readonly session_load: "session/load";
     readonly session_new: "session/new";
@@ -173,7 +174,7 @@ type ToolCallStatus = "pending" | "in_progress" | "completed" | "failed";
  * This enum is used internally for routing RPC responses. You typically won't need
  * to use this directly - the responses are handled automatically by the connection.
  *
- * These are responses to the corresponding AgentRequest variants.
+ * These are responses to the corresponding `AgentRequest` variants.
  */
 /** @internal */
 type ClientResponse = WriteTextFileResponse | ReadTextFileResponse | RequestPermissionResponse | CreateTerminalResponse | TerminalOutputResponse | ReleaseTerminalResponse | WaitForTerminalExitResponse | KillTerminalResponse | ExtMethodResponse;
@@ -196,7 +197,7 @@ type ClientNotification = CancelNotification | ExtNotification;
  * This enum encompasses all method calls from client to agent.
  */
 /** @internal */
-type AgentRequest = InitializeRequest | AuthenticateRequest | NewSessionRequest | LoadSessionRequest | SetSessionModeRequest | PromptRequest | ExtMethodRequest1;
+type AgentRequest = InitializeRequest | AuthenticateRequest | NewSessionRequest | LoadSessionRequest | SetSessionModeRequest | PromptRequest | SetSessionModelRequest | ExtMethodRequest1;
 /**
  * Configuration for connecting to an MCP (Model Context Protocol) server.
  *
@@ -315,10 +316,10 @@ type ContentBlock = {
  * This enum is used internally for routing RPC responses. You typically won't need
  * to use this directly - the responses are handled automatically by the connection.
  *
- * These are responses to the corresponding ClientRequest variants.
+ * These are responses to the corresponding `ClientRequest` variants.
  */
 /** @internal */
-type AgentResponse = InitializeResponse | AuthenticateResponse | NewSessionResponse | LoadSessionResponse | SetSessionModeResponse | PromptResponse | ExtMethodResponse1;
+type AgentResponse = InitializeResponse | AuthenticateResponse | NewSessionResponse | LoadSessionResponse | SetSessionModeResponse | PromptResponse | SetSessionModelResponse | ExtMethodResponse1;
 /**
  * Unique identifier for a Session Mode.
  */
@@ -692,7 +693,7 @@ interface ExtMethodRequest {
     [k: string]: unknown;
 }
 /**
- * Response to fs/write_text_file
+ * Response to `fs/write_text_file`
  */
 interface WriteTextFileResponse {
     /**
@@ -1076,6 +1077,29 @@ interface PromptRequest {
      */
     sessionId: string;
 }
+/**
+ * **UNSTABLE**
+ *
+ * This capability is not part of the spec yet, and may be removed or changed at any point.
+ *
+ * Request parameters for setting a session model.
+ */
+interface SetSessionModelRequest {
+    /**
+     * Extension point for implementations
+     */
+    _meta?: {
+        [k: string]: unknown;
+    };
+    /**
+     * The ID of the model to set.
+     */
+    modelId: string;
+    /**
+     * The ID of the session to set the model for.
+     */
+    sessionId: string;
+}
 interface ExtMethodRequest1 {
     [k: string]: unknown;
 }
@@ -1215,6 +1239,14 @@ interface NewSessionResponse {
         [k: string]: unknown;
     };
     /**
+     * **UNSTABLE**
+     *
+     * This capability is not part of the spec yet, and may be removed or changed at any point.
+     *
+     * Initial model state if supported by the Agent
+     */
+    models?: SessionModelState | null;
+    /**
      * Initial mode state if supported by the Agent
      *
      * See protocol docs: [Session Modes](https://agentclientprotocol.com/protocol/session-modes)
@@ -1226,6 +1258,56 @@ interface NewSessionResponse {
      * Used in all subsequent requests for this conversation.
      */
     sessionId: string;
+}
+/**
+ * **UNSTABLE**
+ *
+ * This capability is not part of the spec yet, and may be removed or changed at any point.
+ *
+ * The set of models and the one currently active.
+ */
+interface SessionModelState {
+    /**
+     * Extension point for implementations
+     */
+    _meta?: {
+        [k: string]: unknown;
+    };
+    /**
+     * The set of models that the Agent can use
+     */
+    availableModels: ModelInfo[];
+    /**
+     * The current model the Agent is in.
+     */
+    currentModelId: string;
+}
+/**
+ * **UNSTABLE**
+ *
+ * This capability is not part of the spec yet, and may be removed or changed at any point.
+ *
+ * Information about a selectable model.
+ */
+interface ModelInfo {
+    /**
+     * Extension point for implementations
+     */
+    _meta?: {
+        [k: string]: unknown;
+    };
+    /**
+     * Optional description of the model.
+     */
+    description?: string | null;
+    /**
+     * Unique identifier for the model.
+     */
+    modelId: string;
+    /**
+     * Human-readable name of the model.
+     */
+    name: string;
 }
 /**
  * The set of modes and the one currently active.
@@ -1273,6 +1355,14 @@ interface LoadSessionResponse {
         [k: string]: unknown;
     };
     /**
+     * **UNSTABLE**
+     *
+     * This capability is not part of the spec yet, and may be removed or changed at any point.
+     *
+     * Initial model state if supported by the Agent
+     */
+    models?: SessionModelState | null;
+    /**
      * Initial mode state if supported by the Agent
      *
      * See protocol docs: [Session Modes](https://agentclientprotocol.com/protocol/session-modes)
@@ -1301,6 +1391,21 @@ interface PromptResponse {
      * Indicates why the agent stopped processing the turn.
      */
     stopReason: "end_turn" | "max_tokens" | "max_turn_requests" | "refusal" | "cancelled";
+}
+/**
+ * **UNSTABLE**
+ *
+ * This capability is not part of the spec yet, and may be removed or changed at any point.
+ *
+ * Response to `session/set_model` method.
+ */
+interface SetSessionModelResponse {
+    /**
+     * Extension point for implementations
+     */
+    _meta?: {
+        [k: string]: unknown;
+    };
 }
 interface ExtMethodResponse1 {
     [k: string]: unknown;
@@ -1495,7 +1600,7 @@ interface AvailableCommand {
      */
     input?: AvailableCommandInput | null;
     /**
-     * Command name (e.g., "create_plan", "research_codebase").
+     * Command name (e.g., `create_plan`, `research_codebase`).
      */
     name: string;
 }
@@ -1783,6 +1888,20 @@ declare const setSessionModeRequestSchema: z.ZodObject<{
     _meta?: Record<string, unknown> | undefined;
 }>;
 /** @internal */
+declare const setSessionModelRequestSchema: z.ZodObject<{
+    _meta: z.ZodOptional<z.ZodRecord<z.ZodString, z.ZodUnknown>>;
+    modelId: z.ZodString;
+    sessionId: z.ZodString;
+}, "strip", z.ZodTypeAny, {
+    sessionId: string;
+    modelId: string;
+    _meta?: Record<string, unknown> | undefined;
+}, {
+    sessionId: string;
+    modelId: string;
+    _meta?: Record<string, unknown> | undefined;
+}>;
+/** @internal */
 declare const extMethodRequest1Schema: z.ZodRecord<z.ZodString, z.ZodUnknown>;
 /** @internal */
 declare const httpHeaderSchema: z.ZodObject<{
@@ -1872,6 +1991,14 @@ declare const promptResponseSchema: z.ZodObject<{
     _meta?: Record<string, unknown> | undefined;
 }, {
     stopReason: "cancelled" | "end_turn" | "max_tokens" | "max_turn_requests" | "refusal";
+    _meta?: Record<string, unknown> | undefined;
+}>;
+/** @internal */
+declare const setSessionModelResponseSchema: z.ZodObject<{
+    _meta: z.ZodOptional<z.ZodRecord<z.ZodString, z.ZodUnknown>>;
+}, "strip", z.ZodTypeAny, {
+    _meta?: Record<string, unknown> | undefined;
+}, {
     _meta?: Record<string, unknown> | undefined;
 }>;
 /** @internal */
@@ -2878,6 +3005,23 @@ declare const promptCapabilitiesSchema: z.ZodObject<{
     embeddedContext?: boolean | undefined;
 }>;
 /** @internal */
+declare const modelInfoSchema: z.ZodObject<{
+    _meta: z.ZodOptional<z.ZodRecord<z.ZodString, z.ZodUnknown>>;
+    description: z.ZodNullable<z.ZodOptional<z.ZodString>>;
+    modelId: z.ZodString;
+    name: z.ZodString;
+}, "strip", z.ZodTypeAny, {
+    modelId: string;
+    name: string;
+    _meta?: Record<string, unknown> | undefined;
+    description?: string | null | undefined;
+}, {
+    modelId: string;
+    name: string;
+    _meta?: Record<string, unknown> | undefined;
+    description?: string | null | undefined;
+}>;
+/** @internal */
 declare const sessionModeSchema: z.ZodObject<{
     _meta: z.ZodOptional<z.ZodRecord<z.ZodString, z.ZodUnknown>>;
     description: z.ZodNullable<z.ZodOptional<z.ZodString>>;
@@ -2893,6 +3037,45 @@ declare const sessionModeSchema: z.ZodObject<{
     id: string;
     _meta?: Record<string, unknown> | undefined;
     description?: string | null | undefined;
+}>;
+/** @internal */
+declare const sessionModelStateSchema: z.ZodObject<{
+    _meta: z.ZodOptional<z.ZodRecord<z.ZodString, z.ZodUnknown>>;
+    availableModels: z.ZodArray<z.ZodObject<{
+        _meta: z.ZodOptional<z.ZodRecord<z.ZodString, z.ZodUnknown>>;
+        description: z.ZodNullable<z.ZodOptional<z.ZodString>>;
+        modelId: z.ZodString;
+        name: z.ZodString;
+    }, "strip", z.ZodTypeAny, {
+        modelId: string;
+        name: string;
+        _meta?: Record<string, unknown> | undefined;
+        description?: string | null | undefined;
+    }, {
+        modelId: string;
+        name: string;
+        _meta?: Record<string, unknown> | undefined;
+        description?: string | null | undefined;
+    }>, "many">;
+    currentModelId: z.ZodString;
+}, "strip", z.ZodTypeAny, {
+    availableModels: {
+        modelId: string;
+        name: string;
+        _meta?: Record<string, unknown> | undefined;
+        description?: string | null | undefined;
+    }[];
+    currentModelId: string;
+    _meta?: Record<string, unknown> | undefined;
+}, {
+    availableModels: {
+        modelId: string;
+        name: string;
+        _meta?: Record<string, unknown> | undefined;
+        description?: string | null | undefined;
+    }[];
+    currentModelId: string;
+    _meta?: Record<string, unknown> | undefined;
 }>;
 /** @internal */
 declare const sessionModeStateSchema: z.ZodObject<{
@@ -3828,6 +4011,44 @@ declare const promptRequestSchema: z.ZodObject<{
 /** @internal */
 declare const newSessionResponseSchema: z.ZodObject<{
     _meta: z.ZodOptional<z.ZodRecord<z.ZodString, z.ZodUnknown>>;
+    models: z.ZodNullable<z.ZodOptional<z.ZodObject<{
+        _meta: z.ZodOptional<z.ZodRecord<z.ZodString, z.ZodUnknown>>;
+        availableModels: z.ZodArray<z.ZodObject<{
+            _meta: z.ZodOptional<z.ZodRecord<z.ZodString, z.ZodUnknown>>;
+            description: z.ZodNullable<z.ZodOptional<z.ZodString>>;
+            modelId: z.ZodString;
+            name: z.ZodString;
+        }, "strip", z.ZodTypeAny, {
+            modelId: string;
+            name: string;
+            _meta?: Record<string, unknown> | undefined;
+            description?: string | null | undefined;
+        }, {
+            modelId: string;
+            name: string;
+            _meta?: Record<string, unknown> | undefined;
+            description?: string | null | undefined;
+        }>, "many">;
+        currentModelId: z.ZodString;
+    }, "strip", z.ZodTypeAny, {
+        availableModels: {
+            modelId: string;
+            name: string;
+            _meta?: Record<string, unknown> | undefined;
+            description?: string | null | undefined;
+        }[];
+        currentModelId: string;
+        _meta?: Record<string, unknown> | undefined;
+    }, {
+        availableModels: {
+            modelId: string;
+            name: string;
+            _meta?: Record<string, unknown> | undefined;
+            description?: string | null | undefined;
+        }[];
+        currentModelId: string;
+        _meta?: Record<string, unknown> | undefined;
+    }>>>;
     modes: z.ZodNullable<z.ZodOptional<z.ZodObject<{
         _meta: z.ZodOptional<z.ZodRecord<z.ZodString, z.ZodUnknown>>;
         availableModes: z.ZodArray<z.ZodObject<{
@@ -3870,6 +4091,16 @@ declare const newSessionResponseSchema: z.ZodObject<{
 }, "strip", z.ZodTypeAny, {
     sessionId: string;
     _meta?: Record<string, unknown> | undefined;
+    models?: {
+        availableModels: {
+            modelId: string;
+            name: string;
+            _meta?: Record<string, unknown> | undefined;
+            description?: string | null | undefined;
+        }[];
+        currentModelId: string;
+        _meta?: Record<string, unknown> | undefined;
+    } | null | undefined;
     modes?: {
         availableModes: {
             name: string;
@@ -3883,6 +4114,16 @@ declare const newSessionResponseSchema: z.ZodObject<{
 }, {
     sessionId: string;
     _meta?: Record<string, unknown> | undefined;
+    models?: {
+        availableModels: {
+            modelId: string;
+            name: string;
+            _meta?: Record<string, unknown> | undefined;
+            description?: string | null | undefined;
+        }[];
+        currentModelId: string;
+        _meta?: Record<string, unknown> | undefined;
+    } | null | undefined;
     modes?: {
         availableModes: {
             name: string;
@@ -3897,6 +4138,44 @@ declare const newSessionResponseSchema: z.ZodObject<{
 /** @internal */
 declare const loadSessionResponseSchema: z.ZodObject<{
     _meta: z.ZodOptional<z.ZodRecord<z.ZodString, z.ZodUnknown>>;
+    models: z.ZodNullable<z.ZodOptional<z.ZodObject<{
+        _meta: z.ZodOptional<z.ZodRecord<z.ZodString, z.ZodUnknown>>;
+        availableModels: z.ZodArray<z.ZodObject<{
+            _meta: z.ZodOptional<z.ZodRecord<z.ZodString, z.ZodUnknown>>;
+            description: z.ZodNullable<z.ZodOptional<z.ZodString>>;
+            modelId: z.ZodString;
+            name: z.ZodString;
+        }, "strip", z.ZodTypeAny, {
+            modelId: string;
+            name: string;
+            _meta?: Record<string, unknown> | undefined;
+            description?: string | null | undefined;
+        }, {
+            modelId: string;
+            name: string;
+            _meta?: Record<string, unknown> | undefined;
+            description?: string | null | undefined;
+        }>, "many">;
+        currentModelId: z.ZodString;
+    }, "strip", z.ZodTypeAny, {
+        availableModels: {
+            modelId: string;
+            name: string;
+            _meta?: Record<string, unknown> | undefined;
+            description?: string | null | undefined;
+        }[];
+        currentModelId: string;
+        _meta?: Record<string, unknown> | undefined;
+    }, {
+        availableModels: {
+            modelId: string;
+            name: string;
+            _meta?: Record<string, unknown> | undefined;
+            description?: string | null | undefined;
+        }[];
+        currentModelId: string;
+        _meta?: Record<string, unknown> | undefined;
+    }>>>;
     modes: z.ZodNullable<z.ZodOptional<z.ZodObject<{
         _meta: z.ZodOptional<z.ZodRecord<z.ZodString, z.ZodUnknown>>;
         availableModes: z.ZodArray<z.ZodObject<{
@@ -3937,6 +4216,16 @@ declare const loadSessionResponseSchema: z.ZodObject<{
     }>>>;
 }, "strip", z.ZodTypeAny, {
     _meta?: Record<string, unknown> | undefined;
+    models?: {
+        availableModels: {
+            modelId: string;
+            name: string;
+            _meta?: Record<string, unknown> | undefined;
+            description?: string | null | undefined;
+        }[];
+        currentModelId: string;
+        _meta?: Record<string, unknown> | undefined;
+    } | null | undefined;
     modes?: {
         availableModes: {
             name: string;
@@ -3949,6 +4238,16 @@ declare const loadSessionResponseSchema: z.ZodObject<{
     } | null | undefined;
 }, {
     _meta?: Record<string, unknown> | undefined;
+    models?: {
+        availableModels: {
+            modelId: string;
+            name: string;
+            _meta?: Record<string, unknown> | undefined;
+            description?: string | null | undefined;
+        }[];
+        currentModelId: string;
+        _meta?: Record<string, unknown> | undefined;
+    } | null | undefined;
     modes?: {
         availableModes: {
             name: string;
@@ -11331,6 +11630,18 @@ declare const agentRequestSchema: z.ZodUnion<[z.ZodObject<{
         } | null | undefined;
     })[];
     _meta?: Record<string, unknown> | undefined;
+}>, z.ZodObject<{
+    _meta: z.ZodOptional<z.ZodRecord<z.ZodString, z.ZodUnknown>>;
+    modelId: z.ZodString;
+    sessionId: z.ZodString;
+}, "strip", z.ZodTypeAny, {
+    sessionId: string;
+    modelId: string;
+    _meta?: Record<string, unknown> | undefined;
+}, {
+    sessionId: string;
+    modelId: string;
+    _meta?: Record<string, unknown> | undefined;
 }>, z.ZodRecord<z.ZodString, z.ZodUnknown>]>;
 /** @internal */
 declare const agentResponseSchema: z.ZodUnion<[z.ZodObject<{
@@ -11469,6 +11780,44 @@ declare const agentResponseSchema: z.ZodUnion<[z.ZodObject<{
     _meta?: Record<string, unknown> | undefined;
 }>, z.ZodObject<{
     _meta: z.ZodOptional<z.ZodRecord<z.ZodString, z.ZodUnknown>>;
+    models: z.ZodNullable<z.ZodOptional<z.ZodObject<{
+        _meta: z.ZodOptional<z.ZodRecord<z.ZodString, z.ZodUnknown>>;
+        availableModels: z.ZodArray<z.ZodObject<{
+            _meta: z.ZodOptional<z.ZodRecord<z.ZodString, z.ZodUnknown>>;
+            description: z.ZodNullable<z.ZodOptional<z.ZodString>>;
+            modelId: z.ZodString;
+            name: z.ZodString;
+        }, "strip", z.ZodTypeAny, {
+            modelId: string;
+            name: string;
+            _meta?: Record<string, unknown> | undefined;
+            description?: string | null | undefined;
+        }, {
+            modelId: string;
+            name: string;
+            _meta?: Record<string, unknown> | undefined;
+            description?: string | null | undefined;
+        }>, "many">;
+        currentModelId: z.ZodString;
+    }, "strip", z.ZodTypeAny, {
+        availableModels: {
+            modelId: string;
+            name: string;
+            _meta?: Record<string, unknown> | undefined;
+            description?: string | null | undefined;
+        }[];
+        currentModelId: string;
+        _meta?: Record<string, unknown> | undefined;
+    }, {
+        availableModels: {
+            modelId: string;
+            name: string;
+            _meta?: Record<string, unknown> | undefined;
+            description?: string | null | undefined;
+        }[];
+        currentModelId: string;
+        _meta?: Record<string, unknown> | undefined;
+    }>>>;
     modes: z.ZodNullable<z.ZodOptional<z.ZodObject<{
         _meta: z.ZodOptional<z.ZodRecord<z.ZodString, z.ZodUnknown>>;
         availableModes: z.ZodArray<z.ZodObject<{
@@ -11511,6 +11860,16 @@ declare const agentResponseSchema: z.ZodUnion<[z.ZodObject<{
 }, "strip", z.ZodTypeAny, {
     sessionId: string;
     _meta?: Record<string, unknown> | undefined;
+    models?: {
+        availableModels: {
+            modelId: string;
+            name: string;
+            _meta?: Record<string, unknown> | undefined;
+            description?: string | null | undefined;
+        }[];
+        currentModelId: string;
+        _meta?: Record<string, unknown> | undefined;
+    } | null | undefined;
     modes?: {
         availableModes: {
             name: string;
@@ -11524,6 +11883,16 @@ declare const agentResponseSchema: z.ZodUnion<[z.ZodObject<{
 }, {
     sessionId: string;
     _meta?: Record<string, unknown> | undefined;
+    models?: {
+        availableModels: {
+            modelId: string;
+            name: string;
+            _meta?: Record<string, unknown> | undefined;
+            description?: string | null | undefined;
+        }[];
+        currentModelId: string;
+        _meta?: Record<string, unknown> | undefined;
+    } | null | undefined;
     modes?: {
         availableModes: {
             name: string;
@@ -11536,6 +11905,44 @@ declare const agentResponseSchema: z.ZodUnion<[z.ZodObject<{
     } | null | undefined;
 }>, z.ZodObject<{
     _meta: z.ZodOptional<z.ZodRecord<z.ZodString, z.ZodUnknown>>;
+    models: z.ZodNullable<z.ZodOptional<z.ZodObject<{
+        _meta: z.ZodOptional<z.ZodRecord<z.ZodString, z.ZodUnknown>>;
+        availableModels: z.ZodArray<z.ZodObject<{
+            _meta: z.ZodOptional<z.ZodRecord<z.ZodString, z.ZodUnknown>>;
+            description: z.ZodNullable<z.ZodOptional<z.ZodString>>;
+            modelId: z.ZodString;
+            name: z.ZodString;
+        }, "strip", z.ZodTypeAny, {
+            modelId: string;
+            name: string;
+            _meta?: Record<string, unknown> | undefined;
+            description?: string | null | undefined;
+        }, {
+            modelId: string;
+            name: string;
+            _meta?: Record<string, unknown> | undefined;
+            description?: string | null | undefined;
+        }>, "many">;
+        currentModelId: z.ZodString;
+    }, "strip", z.ZodTypeAny, {
+        availableModels: {
+            modelId: string;
+            name: string;
+            _meta?: Record<string, unknown> | undefined;
+            description?: string | null | undefined;
+        }[];
+        currentModelId: string;
+        _meta?: Record<string, unknown> | undefined;
+    }, {
+        availableModels: {
+            modelId: string;
+            name: string;
+            _meta?: Record<string, unknown> | undefined;
+            description?: string | null | undefined;
+        }[];
+        currentModelId: string;
+        _meta?: Record<string, unknown> | undefined;
+    }>>>;
     modes: z.ZodNullable<z.ZodOptional<z.ZodObject<{
         _meta: z.ZodOptional<z.ZodRecord<z.ZodString, z.ZodUnknown>>;
         availableModes: z.ZodArray<z.ZodObject<{
@@ -11576,6 +11983,16 @@ declare const agentResponseSchema: z.ZodUnion<[z.ZodObject<{
     }>>>;
 }, "strip", z.ZodTypeAny, {
     _meta?: Record<string, unknown> | undefined;
+    models?: {
+        availableModels: {
+            modelId: string;
+            name: string;
+            _meta?: Record<string, unknown> | undefined;
+            description?: string | null | undefined;
+        }[];
+        currentModelId: string;
+        _meta?: Record<string, unknown> | undefined;
+    } | null | undefined;
     modes?: {
         availableModes: {
             name: string;
@@ -11588,6 +12005,16 @@ declare const agentResponseSchema: z.ZodUnion<[z.ZodObject<{
     } | null | undefined;
 }, {
     _meta?: Record<string, unknown> | undefined;
+    models?: {
+        availableModels: {
+            modelId: string;
+            name: string;
+            _meta?: Record<string, unknown> | undefined;
+            description?: string | null | undefined;
+        }[];
+        currentModelId: string;
+        _meta?: Record<string, unknown> | undefined;
+    } | null | undefined;
     modes?: {
         availableModes: {
             name: string;
@@ -11612,6 +12039,12 @@ declare const agentResponseSchema: z.ZodUnion<[z.ZodObject<{
     _meta?: Record<string, unknown> | undefined;
 }, {
     stopReason: "cancelled" | "end_turn" | "max_tokens" | "max_turn_requests" | "refusal";
+    _meta?: Record<string, unknown> | undefined;
+}>, z.ZodObject<{
+    _meta: z.ZodOptional<z.ZodRecord<z.ZodString, z.ZodUnknown>>;
+}, "strip", z.ZodTypeAny, {
+    _meta?: Record<string, unknown> | undefined;
+}, {
     _meta?: Record<string, unknown> | undefined;
 }>, z.ZodRecord<z.ZodString, z.ZodUnknown>]>;
 /** @internal */
@@ -17131,6 +17564,18 @@ declare const agentClientProtocolSchema: z.ZodUnion<[z.ZodUnion<[z.ZodObject<{
         } | null | undefined;
     })[];
     _meta?: Record<string, unknown> | undefined;
+}>, z.ZodObject<{
+    _meta: z.ZodOptional<z.ZodRecord<z.ZodString, z.ZodUnknown>>;
+    modelId: z.ZodString;
+    sessionId: z.ZodString;
+}, "strip", z.ZodTypeAny, {
+    sessionId: string;
+    modelId: string;
+    _meta?: Record<string, unknown> | undefined;
+}, {
+    sessionId: string;
+    modelId: string;
+    _meta?: Record<string, unknown> | undefined;
 }>, z.ZodRecord<z.ZodString, z.ZodUnknown>]>, z.ZodUnion<[z.ZodObject<{
     _meta: z.ZodOptional<z.ZodRecord<z.ZodString, z.ZodUnknown>>;
     agentCapabilities: z.ZodOptional<z.ZodObject<{
@@ -17267,6 +17712,44 @@ declare const agentClientProtocolSchema: z.ZodUnion<[z.ZodUnion<[z.ZodObject<{
     _meta?: Record<string, unknown> | undefined;
 }>, z.ZodObject<{
     _meta: z.ZodOptional<z.ZodRecord<z.ZodString, z.ZodUnknown>>;
+    models: z.ZodNullable<z.ZodOptional<z.ZodObject<{
+        _meta: z.ZodOptional<z.ZodRecord<z.ZodString, z.ZodUnknown>>;
+        availableModels: z.ZodArray<z.ZodObject<{
+            _meta: z.ZodOptional<z.ZodRecord<z.ZodString, z.ZodUnknown>>;
+            description: z.ZodNullable<z.ZodOptional<z.ZodString>>;
+            modelId: z.ZodString;
+            name: z.ZodString;
+        }, "strip", z.ZodTypeAny, {
+            modelId: string;
+            name: string;
+            _meta?: Record<string, unknown> | undefined;
+            description?: string | null | undefined;
+        }, {
+            modelId: string;
+            name: string;
+            _meta?: Record<string, unknown> | undefined;
+            description?: string | null | undefined;
+        }>, "many">;
+        currentModelId: z.ZodString;
+    }, "strip", z.ZodTypeAny, {
+        availableModels: {
+            modelId: string;
+            name: string;
+            _meta?: Record<string, unknown> | undefined;
+            description?: string | null | undefined;
+        }[];
+        currentModelId: string;
+        _meta?: Record<string, unknown> | undefined;
+    }, {
+        availableModels: {
+            modelId: string;
+            name: string;
+            _meta?: Record<string, unknown> | undefined;
+            description?: string | null | undefined;
+        }[];
+        currentModelId: string;
+        _meta?: Record<string, unknown> | undefined;
+    }>>>;
     modes: z.ZodNullable<z.ZodOptional<z.ZodObject<{
         _meta: z.ZodOptional<z.ZodRecord<z.ZodString, z.ZodUnknown>>;
         availableModes: z.ZodArray<z.ZodObject<{
@@ -17309,6 +17792,16 @@ declare const agentClientProtocolSchema: z.ZodUnion<[z.ZodUnion<[z.ZodObject<{
 }, "strip", z.ZodTypeAny, {
     sessionId: string;
     _meta?: Record<string, unknown> | undefined;
+    models?: {
+        availableModels: {
+            modelId: string;
+            name: string;
+            _meta?: Record<string, unknown> | undefined;
+            description?: string | null | undefined;
+        }[];
+        currentModelId: string;
+        _meta?: Record<string, unknown> | undefined;
+    } | null | undefined;
     modes?: {
         availableModes: {
             name: string;
@@ -17322,6 +17815,16 @@ declare const agentClientProtocolSchema: z.ZodUnion<[z.ZodUnion<[z.ZodObject<{
 }, {
     sessionId: string;
     _meta?: Record<string, unknown> | undefined;
+    models?: {
+        availableModels: {
+            modelId: string;
+            name: string;
+            _meta?: Record<string, unknown> | undefined;
+            description?: string | null | undefined;
+        }[];
+        currentModelId: string;
+        _meta?: Record<string, unknown> | undefined;
+    } | null | undefined;
     modes?: {
         availableModes: {
             name: string;
@@ -17334,6 +17837,44 @@ declare const agentClientProtocolSchema: z.ZodUnion<[z.ZodUnion<[z.ZodObject<{
     } | null | undefined;
 }>, z.ZodObject<{
     _meta: z.ZodOptional<z.ZodRecord<z.ZodString, z.ZodUnknown>>;
+    models: z.ZodNullable<z.ZodOptional<z.ZodObject<{
+        _meta: z.ZodOptional<z.ZodRecord<z.ZodString, z.ZodUnknown>>;
+        availableModels: z.ZodArray<z.ZodObject<{
+            _meta: z.ZodOptional<z.ZodRecord<z.ZodString, z.ZodUnknown>>;
+            description: z.ZodNullable<z.ZodOptional<z.ZodString>>;
+            modelId: z.ZodString;
+            name: z.ZodString;
+        }, "strip", z.ZodTypeAny, {
+            modelId: string;
+            name: string;
+            _meta?: Record<string, unknown> | undefined;
+            description?: string | null | undefined;
+        }, {
+            modelId: string;
+            name: string;
+            _meta?: Record<string, unknown> | undefined;
+            description?: string | null | undefined;
+        }>, "many">;
+        currentModelId: z.ZodString;
+    }, "strip", z.ZodTypeAny, {
+        availableModels: {
+            modelId: string;
+            name: string;
+            _meta?: Record<string, unknown> | undefined;
+            description?: string | null | undefined;
+        }[];
+        currentModelId: string;
+        _meta?: Record<string, unknown> | undefined;
+    }, {
+        availableModels: {
+            modelId: string;
+            name: string;
+            _meta?: Record<string, unknown> | undefined;
+            description?: string | null | undefined;
+        }[];
+        currentModelId: string;
+        _meta?: Record<string, unknown> | undefined;
+    }>>>;
     modes: z.ZodNullable<z.ZodOptional<z.ZodObject<{
         _meta: z.ZodOptional<z.ZodRecord<z.ZodString, z.ZodUnknown>>;
         availableModes: z.ZodArray<z.ZodObject<{
@@ -17374,6 +17915,16 @@ declare const agentClientProtocolSchema: z.ZodUnion<[z.ZodUnion<[z.ZodObject<{
     }>>>;
 }, "strip", z.ZodTypeAny, {
     _meta?: Record<string, unknown> | undefined;
+    models?: {
+        availableModels: {
+            modelId: string;
+            name: string;
+            _meta?: Record<string, unknown> | undefined;
+            description?: string | null | undefined;
+        }[];
+        currentModelId: string;
+        _meta?: Record<string, unknown> | undefined;
+    } | null | undefined;
     modes?: {
         availableModes: {
             name: string;
@@ -17386,6 +17937,16 @@ declare const agentClientProtocolSchema: z.ZodUnion<[z.ZodUnion<[z.ZodObject<{
     } | null | undefined;
 }, {
     _meta?: Record<string, unknown> | undefined;
+    models?: {
+        availableModels: {
+            modelId: string;
+            name: string;
+            _meta?: Record<string, unknown> | undefined;
+            description?: string | null | undefined;
+        }[];
+        currentModelId: string;
+        _meta?: Record<string, unknown> | undefined;
+    } | null | undefined;
     modes?: {
         availableModes: {
             name: string;
@@ -17410,6 +17971,12 @@ declare const agentClientProtocolSchema: z.ZodUnion<[z.ZodUnion<[z.ZodObject<{
     _meta?: Record<string, unknown> | undefined;
 }, {
     stopReason: "cancelled" | "end_turn" | "max_tokens" | "max_turn_requests" | "refusal";
+    _meta?: Record<string, unknown> | undefined;
+}>, z.ZodObject<{
+    _meta: z.ZodOptional<z.ZodRecord<z.ZodString, z.ZodUnknown>>;
+}, "strip", z.ZodTypeAny, {
+    _meta?: Record<string, unknown> | undefined;
+}, {
     _meta?: Record<string, unknown> | undefined;
 }>, z.ZodRecord<z.ZodString, z.ZodUnknown>]>, z.ZodUnion<[z.ZodObject<{
     _meta: z.ZodOptional<z.ZodRecord<z.ZodString, z.ZodUnknown>>;
@@ -20944,4 +21511,4 @@ declare const agentClientProtocolSchema: z.ZodUnion<[z.ZodUnion<[z.ZodObject<{
     _meta?: Record<string, unknown> | undefined;
 }>, z.ZodRecord<z.ZodString, z.ZodUnknown>]>]>;
 
-export { AGENT_METHODS, type AgentCapabilities, type AgentClientProtocol, type AgentNotification, type AgentRequest, type AgentResponse, type Annotations, type AuthMethod, type AuthenticateRequest, type AuthenticateResponse, type AvailableCommand, type AvailableCommandInput, type BlobResourceContents, CLIENT_METHODS, type CancelNotification, type ClientCapabilities, type ClientNotification, type ClientRequest, type ClientResponse, type ContentBlock, type CreateTerminalRequest, type CreateTerminalResponse, type EmbeddedResourceResource, type EnvVariable, type ExtMethodRequest, type ExtMethodRequest1, type ExtMethodResponse, type ExtMethodResponse1, type ExtNotification, type ExtNotification1, type FileSystemCapability, type HttpHeader, type InitializeRequest, type InitializeResponse, type KillTerminalCommandRequest, type KillTerminalResponse, type LoadSessionRequest, type LoadSessionResponse, type McpCapabilities, type McpServer, type NewSessionRequest, type NewSessionResponse, PROTOCOL_VERSION, type PermissionOption, type PlanEntry, type PromptCapabilities, type PromptRequest, type PromptResponse, type ReadTextFileRequest, type ReadTextFileResponse, type ReleaseTerminalRequest, type ReleaseTerminalResponse, type RequestPermissionRequest, type RequestPermissionResponse, type Role, type SessionMode, type SessionModeId, type SessionModeState, type SessionNotification, type SetSessionModeRequest, type SetSessionModeResponse, type Stdio, type TerminalExitStatus, type TerminalOutputRequest, type TerminalOutputResponse, type TextResourceContents, type ToolCallContent, type ToolCallLocation, type ToolCallStatus, type ToolCallUpdate, type ToolKind, type UnstructuredCommandInput, type WaitForTerminalExitRequest, type WaitForTerminalExitResponse, type WriteTextFileRequest, type WriteTextFileResponse, agentCapabilitiesSchema, agentClientProtocolSchema, agentNotificationSchema, agentRequestSchema, agentResponseSchema, annotationsSchema, authMethodSchema, authenticateRequestSchema, authenticateResponseSchema, availableCommandInputSchema, availableCommandSchema, blobResourceContentsSchema, cancelNotificationSchema, clientCapabilitiesSchema, clientNotificationSchema, clientRequestSchema, clientResponseSchema, contentBlockSchema, createTerminalRequestSchema, createTerminalResponseSchema, embeddedResourceResourceSchema, envVariableSchema, extMethodRequest1Schema, extMethodRequestSchema, extMethodResponse1Schema, extMethodResponseSchema, extNotification1Schema, extNotificationSchema, fileSystemCapabilitySchema, httpHeaderSchema, initializeRequestSchema, initializeResponseSchema, killTerminalCommandRequestSchema, killTerminalResponseSchema, loadSessionRequestSchema, loadSessionResponseSchema, mcpCapabilitiesSchema, mcpServerSchema, newSessionRequestSchema, newSessionResponseSchema, permissionOptionSchema, planEntrySchema, promptCapabilitiesSchema, promptRequestSchema, promptResponseSchema, readTextFileRequestSchema, readTextFileResponseSchema, releaseTerminalRequestSchema, releaseTerminalResponseSchema, requestPermissionRequestSchema, requestPermissionResponseSchema, roleSchema, sessionModeIdSchema, sessionModeSchema, sessionModeStateSchema, sessionNotificationSchema, setSessionModeRequestSchema, setSessionModeResponseSchema, stdioSchema, terminalExitStatusSchema, terminalOutputRequestSchema, terminalOutputResponseSchema, textResourceContentsSchema, toolCallContentSchema, toolCallLocationSchema, toolCallStatusSchema, toolCallUpdateSchema, toolKindSchema, unstructuredCommandInputSchema, waitForTerminalExitRequestSchema, waitForTerminalExitResponseSchema, writeTextFileRequestSchema, writeTextFileResponseSchema };
+export { AGENT_METHODS, type AgentCapabilities, type AgentClientProtocol, type AgentNotification, type AgentRequest, type AgentResponse, type Annotations, type AuthMethod, type AuthenticateRequest, type AuthenticateResponse, type AvailableCommand, type AvailableCommandInput, type BlobResourceContents, CLIENT_METHODS, type CancelNotification, type ClientCapabilities, type ClientNotification, type ClientRequest, type ClientResponse, type ContentBlock, type CreateTerminalRequest, type CreateTerminalResponse, type EmbeddedResourceResource, type EnvVariable, type ExtMethodRequest, type ExtMethodRequest1, type ExtMethodResponse, type ExtMethodResponse1, type ExtNotification, type ExtNotification1, type FileSystemCapability, type HttpHeader, type InitializeRequest, type InitializeResponse, type KillTerminalCommandRequest, type KillTerminalResponse, type LoadSessionRequest, type LoadSessionResponse, type McpCapabilities, type McpServer, type ModelInfo, type NewSessionRequest, type NewSessionResponse, PROTOCOL_VERSION, type PermissionOption, type PlanEntry, type PromptCapabilities, type PromptRequest, type PromptResponse, type ReadTextFileRequest, type ReadTextFileResponse, type ReleaseTerminalRequest, type ReleaseTerminalResponse, type RequestPermissionRequest, type RequestPermissionResponse, type Role, type SessionMode, type SessionModeId, type SessionModeState, type SessionModelState, type SessionNotification, type SetSessionModeRequest, type SetSessionModeResponse, type SetSessionModelRequest, type SetSessionModelResponse, type Stdio, type TerminalExitStatus, type TerminalOutputRequest, type TerminalOutputResponse, type TextResourceContents, type ToolCallContent, type ToolCallLocation, type ToolCallStatus, type ToolCallUpdate, type ToolKind, type UnstructuredCommandInput, type WaitForTerminalExitRequest, type WaitForTerminalExitResponse, type WriteTextFileRequest, type WriteTextFileResponse, agentCapabilitiesSchema, agentClientProtocolSchema, agentNotificationSchema, agentRequestSchema, agentResponseSchema, annotationsSchema, authMethodSchema, authenticateRequestSchema, authenticateResponseSchema, availableCommandInputSchema, availableCommandSchema, blobResourceContentsSchema, cancelNotificationSchema, clientCapabilitiesSchema, clientNotificationSchema, clientRequestSchema, clientResponseSchema, contentBlockSchema, createTerminalRequestSchema, createTerminalResponseSchema, embeddedResourceResourceSchema, envVariableSchema, extMethodRequest1Schema, extMethodRequestSchema, extMethodResponse1Schema, extMethodResponseSchema, extNotification1Schema, extNotificationSchema, fileSystemCapabilitySchema, httpHeaderSchema, initializeRequestSchema, initializeResponseSchema, killTerminalCommandRequestSchema, killTerminalResponseSchema, loadSessionRequestSchema, loadSessionResponseSchema, mcpCapabilitiesSchema, mcpServerSchema, modelInfoSchema, newSessionRequestSchema, newSessionResponseSchema, permissionOptionSchema, planEntrySchema, promptCapabilitiesSchema, promptRequestSchema, promptResponseSchema, readTextFileRequestSchema, readTextFileResponseSchema, releaseTerminalRequestSchema, releaseTerminalResponseSchema, requestPermissionRequestSchema, requestPermissionResponseSchema, roleSchema, sessionModeIdSchema, sessionModeSchema, sessionModeStateSchema, sessionModelStateSchema, sessionNotificationSchema, setSessionModeRequestSchema, setSessionModeResponseSchema, setSessionModelRequestSchema, setSessionModelResponseSchema, stdioSchema, terminalExitStatusSchema, terminalOutputRequestSchema, terminalOutputResponseSchema, textResourceContentsSchema, toolCallContentSchema, toolCallLocationSchema, toolCallStatusSchema, toolCallUpdateSchema, toolKindSchema, unstructuredCommandInputSchema, waitForTerminalExitRequestSchema, waitForTerminalExitResponseSchema, writeTextFileRequestSchema, writeTextFileResponseSchema };
