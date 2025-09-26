@@ -10,7 +10,7 @@ struct TestClient {
     file_contents: Arc<Mutex<std::collections::HashMap<std::path::PathBuf, String>>>,
     written_files: Arc<Mutex<Vec<(std::path::PathBuf, String)>>>,
     session_notifications: Arc<Mutex<Vec<SessionNotification>>>,
-    extension_notifications: Arc<Mutex<Vec<(String, Arc<RawValue>)>>>,
+    extension_notifications: Arc<Mutex<Vec<(String, ExtNotification)>>>,
 }
 
 impl TestClient {
@@ -40,6 +40,7 @@ macro_rules! raw_json {
     }};
 }
 
+#[async_trait::async_trait(?Send)]
 impl Client for TestClient {
     async fn request_permission(
         &self,
@@ -64,7 +65,7 @@ impl Client for TestClient {
             .lock()
             .unwrap()
             .push((arguments.path, arguments.content));
-        Ok(Default::default())
+        Ok(WriteTextFileResponse::default())
     }
 
     async fn read_text_file(
@@ -122,29 +123,21 @@ impl Client for TestClient {
         unimplemented!()
     }
 
-    async fn ext_method(
-        &self,
-        method: std::sync::Arc<str>,
-        params: Arc<RawValue>,
-    ) -> Result<Arc<RawValue>, Error> {
-        match dbg!(method.as_ref()) {
+    async fn ext_method(&self, args: ExtRequest) -> Result<ExtResponse, Error> {
+        match dbg!(args.method.as_ref()) {
             "example.com/ping" => Ok(raw_json!({
                 "response": "pong",
-                "params": params
+                "params": args.params
             })),
             _ => Err(Error::method_not_found()),
         }
     }
 
-    async fn ext_notification(
-        &self,
-        method: std::sync::Arc<str>,
-        params: Arc<RawValue>,
-    ) -> Result<(), Error> {
+    async fn ext_notification(&self, args: ExtNotification) -> Result<(), Error> {
         self.extension_notifications
             .lock()
             .unwrap()
-            .push((method.to_string(), params));
+            .push((args.method.to_string(), args));
         Ok(())
     }
 }
@@ -154,7 +147,7 @@ struct TestAgent {
     sessions: Arc<Mutex<std::collections::HashSet<SessionId>>>,
     prompts_received: Arc<Mutex<Vec<PromptReceived>>>,
     cancellations_received: Arc<Mutex<Vec<SessionId>>>,
-    extension_notifications: Arc<Mutex<Vec<(String, Arc<RawValue>)>>>,
+    extension_notifications: Arc<Mutex<Vec<(String, ExtNotification)>>>,
 }
 
 type PromptReceived = (SessionId, Vec<ContentBlock>);
@@ -170,11 +163,12 @@ impl TestAgent {
     }
 }
 
+#[async_trait::async_trait(?Send)]
 impl Agent for TestAgent {
     async fn initialize(&self, arguments: InitializeRequest) -> Result<InitializeResponse, Error> {
         Ok(InitializeResponse {
             protocol_version: arguments.protocol_version,
-            agent_capabilities: Default::default(),
+            agent_capabilities: AgentCapabilities::default(),
             auth_methods: vec![],
             meta: None,
         })
@@ -184,7 +178,7 @@ impl Agent for TestAgent {
         &self,
         _arguments: AuthenticateRequest,
     ) -> Result<AuthenticateResponse, Error> {
-        Ok(Default::default())
+        Ok(AuthenticateResponse::default())
     }
 
     async fn new_session(
@@ -196,6 +190,8 @@ impl Agent for TestAgent {
         Ok(NewSessionResponse {
             session_id,
             modes: None,
+            #[cfg(feature = "unstable")]
+            models: None,
             meta: None,
         })
     }
@@ -203,6 +199,8 @@ impl Agent for TestAgent {
     async fn load_session(&self, _: LoadSessionRequest) -> Result<LoadSessionResponse, Error> {
         Ok(LoadSessionResponse {
             modes: None,
+            #[cfg(feature = "unstable")]
+            models: None,
             meta: None,
         })
     }
@@ -233,16 +231,21 @@ impl Agent for TestAgent {
         Ok(())
     }
 
-    async fn ext_method(
+    #[cfg(feature = "unstable")]
+    async fn set_session_model(
         &self,
-        method: Arc<str>,
-        params: Arc<RawValue>,
-    ) -> Result<Arc<RawValue>, Error> {
+        args: SetSessionModelRequest,
+    ) -> Result<SetSessionModelResponse, Error> {
+        log::info!("Received select model request {args:?}");
+        Ok(SetSessionModelResponse::default())
+    }
+
+    async fn ext_method(&self, args: ExtRequest) -> Result<ExtResponse, Error> {
         dbg!();
-        match dbg!(method.as_ref()) {
+        match dbg!(args.method.as_ref()) {
             "example.com/echo" => {
                 let response = serde_json::json!({
-                    "echo": params
+                    "echo": args.params
                 });
                 Ok(serde_json::value::to_raw_value(&response)?.into())
             }
@@ -250,26 +253,22 @@ impl Agent for TestAgent {
         }
     }
 
-    async fn ext_notification(
-        &self,
-        method: std::sync::Arc<str>,
-        params: Arc<RawValue>,
-    ) -> Result<(), Error> {
+    async fn ext_notification(&self, args: ExtNotification) -> Result<(), Error> {
         self.extension_notifications
             .lock()
             .unwrap()
-            .push((method.to_string(), params));
+            .push((args.method.to_string(), args));
         Ok(())
     }
 }
 
 // Helper function to create a bidirectional connection
-async fn create_connection_pair(
-    client: TestClient,
-    agent: TestAgent,
+fn create_connection_pair(
+    client: &TestClient,
+    agent: &TestAgent,
 ) -> (ClientSideConnection, AgentSideConnection) {
-    let (client_to_agent_tx, client_to_agent_rx) = async_pipe::pipe();
-    let (agent_to_client_tx, agent_to_client_rx) = async_pipe::pipe();
+    let (client_to_agent_rx, client_to_agent_tx) = piper::pipe(1024);
+    let (agent_to_client_rx, agent_to_client_tx) = piper::pipe(1024);
 
     let (agent_conn, agent_io_task) = ClientSideConnection::new(
         client.clone(),
@@ -304,12 +303,12 @@ async fn test_initialize() {
             let client = TestClient::new();
             let agent = TestAgent::new();
 
-            let (agent_conn, _client_conn) = create_connection_pair(client, agent).await;
+            let (agent_conn, _client_conn) = create_connection_pair(&client, &agent);
 
             let result = agent_conn
                 .initialize(InitializeRequest {
                     protocol_version: VERSION,
-                    client_capabilities: Default::default(),
+                    client_capabilities: ClientCapabilities::default(),
                     meta: None,
                 })
                 .await;
@@ -329,7 +328,7 @@ async fn test_basic_session_creation() {
             let client = TestClient::new();
             let agent = TestAgent::new();
 
-            let (agent_conn, _client_conn) = create_connection_pair(client, agent).await;
+            let (agent_conn, _client_conn) = create_connection_pair(&client, &agent);
 
             agent_conn
                 .new_session(NewSessionRequest {
@@ -355,7 +354,7 @@ async fn test_bidirectional_file_operations() {
             let test_path = std::path::PathBuf::from("/test/file.txt");
             client.add_file_content(test_path.clone(), "Hello, World!".to_string());
 
-            let (_agent_conn, client_conn) = create_connection_pair(client.clone(), agent).await;
+            let (_agent_conn, client_conn) = create_connection_pair(&client, &agent);
 
             // Test reading a file
             let session_id = SessionId(Arc::from("test-session"));
@@ -395,7 +394,7 @@ async fn test_session_notifications() {
             let client = TestClient::new();
             let agent = TestAgent::new();
 
-            let (_agent_conn, client_conn) = create_connection_pair(client.clone(), agent).await;
+            let (_agent_conn, client_conn) = create_connection_pair(&client, &agent);
 
             let session_id = SessionId(Arc::from("test-session"));
             // Send various session updates
@@ -447,7 +446,7 @@ async fn test_cancel_notification() {
             let client = TestClient::new();
             let agent = TestAgent::new();
 
-            let (agent_conn, _client_conn) = create_connection_pair(client, agent.clone()).await;
+            let (agent_conn, _client_conn) = create_connection_pair(&client, &agent);
 
             let session_id = SessionId(Arc::from("test-session"));
             // Send cancel notification
@@ -482,7 +481,7 @@ async fn test_concurrent_operations() {
                 client.add_file_content(path, format!("Content {i}"));
             }
 
-            let (_agent_conn, client_conn) = create_connection_pair(client.clone(), agent).await;
+            let (_agent_conn, client_conn) = create_connection_pair(&client, &agent);
 
             let session_id = SessionId(Arc::from("test-session"));
 
@@ -525,7 +524,7 @@ async fn test_full_conversation_flow() {
                 option_id: PermissionOptionId(Arc::from("allow-once")),
             });
 
-            let (agent_conn, client_conn) = create_connection_pair(client.clone(), agent).await;
+            let (agent_conn, client_conn) = create_connection_pair(&client, &agent);
             // 1. Start new session
             let new_session_result = agent_conn
                 .new_session(NewSessionRequest {
@@ -636,7 +635,7 @@ async fn test_full_conversation_flow() {
                 RequestPermissionOutcome::Selected { option_id } => {
                     assert_eq!(option_id.0.as_ref(), "allow-once");
                 }
-                _ => panic!("Expected permission to be granted"),
+                RequestPermissionOutcome::Cancelled => panic!("Expected permission to be granted"),
             }
 
             // 6. Update tool call status
@@ -727,7 +726,6 @@ async fn test_full_conversation_flow() {
                             found_tool_update = true;
                         }
                     }
-                    SessionUpdate::AvailableCommandsUpdate { .. } => {}
                     _ => {}
                 }
             }
@@ -822,11 +820,14 @@ async fn test_extension_methods_and_notifications() {
             let client_ref = client.clone();
             let agent_ref = agent.clone();
 
-            let (client_conn, agent_conn) = create_connection_pair(client, agent).await;
+            let (client_conn, agent_conn) = create_connection_pair(&client, &agent);
 
             // Test agent calling client extension method
             let client_response = agent_conn
-                .ext_method("example.com/ping".into(), raw_json!({"data": "test"}))
+                .ext_method(ExtRequest {
+                    method: "example.com/ping".into(),
+                    params: raw_json!({"data": "test"}),
+                })
                 .await
                 .unwrap();
 
@@ -840,7 +841,10 @@ async fn test_extension_methods_and_notifications() {
 
             // Test client calling agent extension method
             let agent_response = client_conn
-                .ext_method("example.com/echo".into(), raw_json!({"message": "hello"}))
+                .ext_method(ExtRequest {
+                    method: "example.com/echo".into(),
+                    params: raw_json!({"message": "hello"}),
+                })
                 .await
                 .unwrap();
 
@@ -853,18 +857,18 @@ async fn test_extension_methods_and_notifications() {
 
             // Test extension notifications
             agent_conn
-                .ext_notification(
-                    "example.com/client/notify".into(),
-                    raw_json!({"info": "client notification"}),
-                )
+                .ext_notification(ExtNotification {
+                    method: "example.com/client/notify".into(),
+                    params: raw_json!({"info": "client notification"}),
+                })
                 .await
                 .unwrap();
 
             client_conn
-                .ext_notification(
-                    "example.com/agent/notify".into(),
-                    raw_json!({"info": "agent notification"}),
-                )
+                .ext_notification(ExtNotification {
+                    method: "example.com/agent/notify".into(),
+                    params: raw_json!({"info": "agent notification"}),
+                })
                 .await
                 .unwrap();
 

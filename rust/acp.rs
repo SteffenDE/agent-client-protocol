@@ -27,9 +27,9 @@
 //! which define the core methods and capabilities of each side of the connection.
 //!
 //! To see working examples of these traits in action, check out the
-//! [agent](https://github.com/zed-industries/agent-client-protocol/blob/main/rust/example_agent.rs)
+//! [agent](https://github.com/zed-industries/agent-client-protocol/blob/main/rust/examples/agent.rs)
 //! and
-//! [client](https://github.com/zed-industries/agent-client-protocol/blob/main/rust/example_client.rs)
+//! [client](https://github.com/zed-industries/agent-client-protocol/blob/main/rust/examples/client.rs)
 //! example binaries included with this crate.
 //!
 //! ### Implementation Pattern
@@ -69,6 +69,7 @@ pub use content::*;
 pub use error::*;
 pub use ext::*;
 pub use plan::*;
+pub use serde_json::value::RawValue;
 pub use stream_broadcast::{
     StreamMessage, StreamMessageContent, StreamMessageDirection, StreamReceiver,
 };
@@ -79,7 +80,6 @@ use anyhow::Result;
 use futures::{AsyncRead, AsyncWrite, Future, future::LocalBoxFuture};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
-use serde_json::value::RawValue;
 use std::{fmt, sync::Arc};
 
 use crate::rpc::{MessageHandler, RpcConnection, Side};
@@ -166,102 +166,100 @@ impl ClientSideConnection {
     }
 }
 
+#[async_trait::async_trait(?Send)]
 impl Agent for ClientSideConnection {
-    async fn initialize(&self, arguments: InitializeRequest) -> Result<InitializeResponse, Error> {
+    async fn initialize(&self, args: InitializeRequest) -> Result<InitializeResponse, Error> {
         self.conn
             .request(
                 INITIALIZE_METHOD_NAME,
-                Some(ClientRequest::InitializeRequest(arguments)),
+                Some(ClientRequest::InitializeRequest(args)),
             )
             .await
     }
 
-    async fn authenticate(
-        &self,
-        arguments: AuthenticateRequest,
-    ) -> Result<AuthenticateResponse, Error> {
+    async fn authenticate(&self, args: AuthenticateRequest) -> Result<AuthenticateResponse, Error> {
         self.conn
             .request::<Option<_>>(
                 AUTHENTICATE_METHOD_NAME,
-                Some(ClientRequest::AuthenticateRequest(arguments)),
+                Some(ClientRequest::AuthenticateRequest(args)),
             )
             .await
-            .map(|value| value.unwrap_or_default())
+            .map(Option::unwrap_or_default)
     }
 
-    async fn new_session(&self, arguments: NewSessionRequest) -> Result<NewSessionResponse, Error> {
+    async fn new_session(&self, args: NewSessionRequest) -> Result<NewSessionResponse, Error> {
         self.conn
             .request(
                 SESSION_NEW_METHOD_NAME,
-                Some(ClientRequest::NewSessionRequest(arguments)),
+                Some(ClientRequest::NewSessionRequest(args)),
             )
             .await
     }
 
-    async fn load_session(
-        &self,
-        arguments: LoadSessionRequest,
-    ) -> Result<LoadSessionResponse, Error> {
+    async fn load_session(&self, args: LoadSessionRequest) -> Result<LoadSessionResponse, Error> {
         self.conn
             .request::<Option<_>>(
                 SESSION_LOAD_METHOD_NAME,
-                Some(ClientRequest::LoadSessionRequest(arguments)),
+                Some(ClientRequest::LoadSessionRequest(args)),
             )
             .await
-            .map(|value| value.unwrap_or_default())
+            .map(Option::unwrap_or_default)
     }
 
     async fn set_session_mode(
         &self,
-        arguments: SetSessionModeRequest,
+        args: SetSessionModeRequest,
     ) -> Result<SetSessionModeResponse, Error> {
         self.conn
             .request(
                 SESSION_SET_MODE_METHOD_NAME,
-                Some(ClientRequest::SetSessionModeRequest(arguments)),
+                Some(ClientRequest::SetSessionModeRequest(args)),
             )
             .await
     }
 
-    async fn prompt(&self, arguments: PromptRequest) -> Result<PromptResponse, Error> {
+    async fn prompt(&self, args: PromptRequest) -> Result<PromptResponse, Error> {
         self.conn
             .request(
                 SESSION_PROMPT_METHOD_NAME,
-                Some(ClientRequest::PromptRequest(arguments)),
+                Some(ClientRequest::PromptRequest(args)),
             )
             .await
     }
 
-    async fn cancel(&self, notification: CancelNotification) -> Result<(), Error> {
+    async fn cancel(&self, args: CancelNotification) -> Result<(), Error> {
         self.conn.notify(
             SESSION_CANCEL_METHOD_NAME,
-            Some(ClientNotification::CancelNotification(notification)),
+            Some(ClientNotification::CancelNotification(args)),
         )
     }
 
-    async fn ext_method(
+    #[cfg(feature = "unstable")]
+    async fn set_session_model(
         &self,
-        method: Arc<str>,
-        params: Arc<RawValue>,
-    ) -> Result<Arc<RawValue>, Error> {
+        args: SetSessionModelRequest,
+    ) -> Result<SetSessionModelResponse, Error> {
         self.conn
             .request(
-                format!("_{method}"),
-                Some(ClientRequest::ExtMethodRequest(ExtMethod {
-                    method,
-                    params,
-                })),
+                SESSION_SET_MODEL_METHOD_NAME,
+                Some(ClientRequest::SetSessionModelRequest(args)),
             )
             .await
     }
 
-    async fn ext_notification(&self, method: Arc<str>, params: Arc<RawValue>) -> Result<(), Error> {
+    async fn ext_method(&self, args: ExtRequest) -> Result<ExtResponse, Error> {
+        self.conn
+            .request(
+                format!("_{}", args.method),
+                Some(ClientRequest::ExtMethodRequest(args)),
+            )
+            .await
+    }
+
+    async fn ext_notification(&self, args: ExtNotification) -> Result<(), Error> {
         self.conn.notify(
-            format!("_{method}"),
-            Some(ClientNotification::ExtNotification(ExtMethod {
-                method,
-                params,
-            })),
+            format!("_{}", args.method),
+            Some(ClientNotification::ExtNotification(args)),
         )
     }
 }
@@ -310,7 +308,7 @@ impl Side for ClientSide {
                 .map_err(Into::into),
             _ => {
                 if let Some(custom_method) = method.strip_prefix('_') {
-                    Ok(AgentRequest::ExtMethodRequest(ExtMethod {
+                    Ok(AgentRequest::ExtMethodRequest(ExtRequest {
                         method: custom_method.into(),
                         params: RawValue::from_string(params.get().to_string())?.into(),
                     }))
@@ -333,7 +331,7 @@ impl Side for ClientSide {
                 .map_err(Into::into),
             _ => {
                 if let Some(custom_method) = method.strip_prefix('_') {
-                    Ok(AgentNotification::ExtNotification(ExtMethod {
+                    Ok(AgentNotification::ExtNotification(ExtNotification {
                         method: custom_method.into(),
                         params: RawValue::from_string(params.get().to_string())?.into(),
                     }))
@@ -381,7 +379,7 @@ impl<T: Client> MessageHandler<ClientSide> for T {
                 Ok(ClientResponse::KillTerminalResponse(response))
             }
             AgentRequest::ExtMethodRequest(args) => {
-                let response = self.ext_method(args.method, args.params).await?;
+                let response = self.ext_method(args).await?;
                 Ok(ClientResponse::ExtMethodResponse(response))
             }
         }
@@ -389,11 +387,11 @@ impl<T: Client> MessageHandler<ClientSide> for T {
 
     async fn handle_notification(&self, notification: AgentNotification) -> Result<(), Error> {
         match notification {
-            AgentNotification::SessionNotification(notification) => {
-                self.session_notification(notification).await?;
+            AgentNotification::SessionNotification(args) => {
+                self.session_notification(args).await?;
             }
             AgentNotification::ExtNotification(args) => {
-                self.ext_notification(args.method, args.params).await?;
+                self.ext_notification(args).await?;
             }
         }
         Ok(())
@@ -457,133 +455,127 @@ impl AgentSideConnection {
     }
 }
 
+#[async_trait::async_trait(?Send)]
 impl Client for AgentSideConnection {
     async fn request_permission(
         &self,
-        arguments: RequestPermissionRequest,
+        args: RequestPermissionRequest,
     ) -> Result<RequestPermissionResponse, Error> {
         self.conn
             .request(
                 SESSION_REQUEST_PERMISSION_METHOD_NAME,
-                Some(AgentRequest::RequestPermissionRequest(arguments)),
+                Some(AgentRequest::RequestPermissionRequest(args)),
             )
             .await
     }
 
     async fn write_text_file(
         &self,
-        arguments: WriteTextFileRequest,
+        args: WriteTextFileRequest,
     ) -> Result<WriteTextFileResponse, Error> {
         self.conn
             .request::<Option<_>>(
                 FS_WRITE_TEXT_FILE_METHOD_NAME,
-                Some(AgentRequest::WriteTextFileRequest(arguments)),
+                Some(AgentRequest::WriteTextFileRequest(args)),
             )
             .await
-            .map(|value| value.unwrap_or_default())
+            .map(Option::unwrap_or_default)
     }
 
     async fn read_text_file(
         &self,
-        arguments: ReadTextFileRequest,
+        args: ReadTextFileRequest,
     ) -> Result<ReadTextFileResponse, Error> {
         self.conn
             .request(
                 FS_READ_TEXT_FILE_METHOD_NAME,
-                Some(AgentRequest::ReadTextFileRequest(arguments)),
+                Some(AgentRequest::ReadTextFileRequest(args)),
             )
             .await
     }
 
     async fn create_terminal(
         &self,
-        arguments: CreateTerminalRequest,
+        args: CreateTerminalRequest,
     ) -> Result<CreateTerminalResponse, Error> {
         self.conn
             .request(
                 TERMINAL_CREATE_METHOD_NAME,
-                Some(AgentRequest::CreateTerminalRequest(arguments)),
+                Some(AgentRequest::CreateTerminalRequest(args)),
             )
             .await
     }
 
     async fn terminal_output(
         &self,
-        arguments: TerminalOutputRequest,
+        args: TerminalOutputRequest,
     ) -> Result<TerminalOutputResponse, Error> {
         self.conn
             .request(
                 TERMINAL_OUTPUT_METHOD_NAME,
-                Some(AgentRequest::TerminalOutputRequest(arguments)),
+                Some(AgentRequest::TerminalOutputRequest(args)),
             )
             .await
     }
 
     async fn release_terminal(
         &self,
-        arguments: ReleaseTerminalRequest,
+        args: ReleaseTerminalRequest,
     ) -> Result<ReleaseTerminalResponse, Error> {
         self.conn
             .request::<Option<_>>(
                 TERMINAL_RELEASE_METHOD_NAME,
-                Some(AgentRequest::ReleaseTerminalRequest(arguments)),
+                Some(AgentRequest::ReleaseTerminalRequest(args)),
             )
             .await
-            .map(|value| value.unwrap_or_default())
+            .map(Option::unwrap_or_default)
     }
 
     async fn wait_for_terminal_exit(
         &self,
-        arguments: WaitForTerminalExitRequest,
+        args: WaitForTerminalExitRequest,
     ) -> Result<WaitForTerminalExitResponse, Error> {
         self.conn
             .request(
                 TERMINAL_WAIT_FOR_EXIT_METHOD_NAME,
-                Some(AgentRequest::WaitForTerminalExitRequest(arguments)),
+                Some(AgentRequest::WaitForTerminalExitRequest(args)),
             )
             .await
     }
 
     async fn kill_terminal_command(
         &self,
-        arguments: KillTerminalCommandRequest,
+        args: KillTerminalCommandRequest,
     ) -> Result<KillTerminalCommandResponse, Error> {
         self.conn
             .request::<Option<_>>(
                 TERMINAL_KILL_METHOD_NAME,
-                Some(AgentRequest::KillTerminalCommandRequest(arguments)),
+                Some(AgentRequest::KillTerminalCommandRequest(args)),
             )
             .await
-            .map(|value| value.unwrap_or_default())
+            .map(Option::unwrap_or_default)
     }
 
-    async fn session_notification(&self, notification: SessionNotification) -> Result<(), Error> {
+    async fn session_notification(&self, args: SessionNotification) -> Result<(), Error> {
         self.conn.notify(
             SESSION_UPDATE_NOTIFICATION,
-            Some(AgentNotification::SessionNotification(notification)),
+            Some(AgentNotification::SessionNotification(args)),
         )
     }
 
-    async fn ext_method(
-        &self,
-        method: Arc<str>,
-        params: Arc<RawValue>,
-    ) -> Result<Arc<RawValue>, Error> {
+    async fn ext_method(&self, args: ExtRequest) -> Result<ExtResponse, Error> {
         self.conn
             .request(
-                format!("_{method}"),
-                Some(AgentRequest::ExtMethodRequest(ExtMethod { method, params })),
+                format!("_{}", args.method),
+                Some(AgentRequest::ExtMethodRequest(args)),
             )
             .await
     }
 
-    async fn ext_notification(&self, method: Arc<str>, params: Arc<RawValue>) -> Result<(), Error> {
+    async fn ext_notification(&self, args: ExtNotification) -> Result<(), Error> {
         self.conn.notify(
-            format!("_{method}"),
-            Some(AgentNotification::ExtNotification(ExtMethod {
-                method,
-                params,
-            })),
+            format!("_{}", args.method),
+            Some(AgentNotification::ExtNotification(args)),
         )
     }
 }
@@ -621,12 +613,16 @@ impl Side for AgentSide {
             SESSION_SET_MODE_METHOD_NAME => serde_json::from_str(params.get())
                 .map(ClientRequest::SetSessionModeRequest)
                 .map_err(Into::into),
+            #[cfg(feature = "unstable")]
+            SESSION_SET_MODEL_METHOD_NAME => serde_json::from_str(params.get())
+                .map(ClientRequest::SetSessionModelRequest)
+                .map_err(Into::into),
             SESSION_PROMPT_METHOD_NAME => serde_json::from_str(params.get())
                 .map(ClientRequest::PromptRequest)
                 .map_err(Into::into),
             _ => {
                 if let Some(custom_method) = method.strip_prefix('_') {
-                    Ok(ClientRequest::ExtMethodRequest(ExtMethod {
+                    Ok(ClientRequest::ExtMethodRequest(ExtRequest {
                         method: custom_method.into(),
                         params: RawValue::from_string(params.get().to_string())?.into(),
                     }))
@@ -649,7 +645,7 @@ impl Side for AgentSide {
                 .map_err(Into::into),
             _ => {
                 if let Some(custom_method) = method.strip_prefix('_') {
-                    Ok(ClientNotification::ExtNotification(ExtMethod {
+                    Ok(ClientNotification::ExtNotification(ExtNotification {
                         method: custom_method.into(),
                         params: RawValue::from_string(params.get().to_string())?.into(),
                     }))
@@ -688,8 +684,13 @@ impl<T: Agent> MessageHandler<AgentSide> for T {
                 let response = self.set_session_mode(args).await?;
                 Ok(AgentResponse::SetSessionModeResponse(response))
             }
+            #[cfg(feature = "unstable")]
+            ClientRequest::SetSessionModelRequest(args) => {
+                let response = self.set_session_model(args).await?;
+                Ok(AgentResponse::SetSessionModelResponse(response))
+            }
             ClientRequest::ExtMethodRequest(args) => {
-                let response = self.ext_method(args.method, args.params).await?;
+                let response = self.ext_method(args).await?;
                 Ok(AgentResponse::ExtMethodResponse(response))
             }
         }
@@ -697,11 +698,11 @@ impl<T: Agent> MessageHandler<AgentSide> for T {
 
     async fn handle_notification(&self, notification: ClientNotification) -> Result<(), Error> {
         match notification {
-            ClientNotification::CancelNotification(notification) => {
-                self.cancel(notification).await?;
+            ClientNotification::CancelNotification(args) => {
+                self.cancel(args).await?;
             }
             ClientNotification::ExtNotification(args) => {
-                self.ext_notification(args.method, args.params).await?;
+                self.ext_notification(args).await?;
             }
         }
         Ok(())

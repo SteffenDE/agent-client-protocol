@@ -1,6 +1,7 @@
 export const AGENT_METHODS = {
   authenticate: "authenticate",
   initialize: "initialize",
+  model_select: "session/set_model",
   session_cancel: "session/cancel",
   session_load: "session/load",
   session_new: "session/new",
@@ -210,7 +211,7 @@ export type ToolCallStatus = "pending" | "in_progress" | "completed" | "failed";
  * This enum is used internally for routing RPC responses. You typically won't need
  * to use this directly - the responses are handled automatically by the connection.
  *
- * These are responses to the corresponding AgentRequest variants.
+ * These are responses to the corresponding `AgentRequest` variants.
  */
 /** @internal */
 export type ClientResponse =
@@ -249,6 +250,7 @@ export type AgentRequest =
   | LoadSessionRequest
   | SetSessionModeRequest
   | PromptRequest
+  | SetSessionModelRequest
   | ExtMethodRequest1;
 /**
  * Configuration for connecting to an MCP (Model Context Protocol) server.
@@ -376,7 +378,7 @@ export type ContentBlock =
  * This enum is used internally for routing RPC responses. You typically won't need
  * to use this directly - the responses are handled automatically by the connection.
  *
- * These are responses to the corresponding ClientRequest variants.
+ * These are responses to the corresponding `ClientRequest` variants.
  */
 /** @internal */
 export type AgentResponse =
@@ -386,6 +388,7 @@ export type AgentResponse =
   | LoadSessionResponse
   | SetSessionModeResponse
   | PromptResponse
+  | SetSessionModelResponse
   | ExtMethodResponse1;
 /**
  * Unique identifier for a Session Mode.
@@ -761,7 +764,7 @@ export interface ExtMethodRequest {
   [k: string]: unknown;
 }
 /**
- * Response to fs/write_text_file
+ * Response to `fs/write_text_file`
  */
 export interface WriteTextFileResponse {
   /**
@@ -1147,6 +1150,29 @@ export interface PromptRequest {
    */
   sessionId: string;
 }
+/**
+ * **UNSTABLE**
+ *
+ * This capability is not part of the spec yet, and may be removed or changed at any point.
+ *
+ * Request parameters for setting a session model.
+ */
+export interface SetSessionModelRequest {
+  /**
+   * Extension point for implementations
+   */
+  _meta?: {
+    [k: string]: unknown;
+  };
+  /**
+   * The ID of the model to set.
+   */
+  modelId: string;
+  /**
+   * The ID of the session to set the model for.
+   */
+  sessionId: string;
+}
 export interface ExtMethodRequest1 {
   [k: string]: unknown;
 }
@@ -1286,6 +1312,14 @@ export interface NewSessionResponse {
     [k: string]: unknown;
   };
   /**
+   * **UNSTABLE**
+   *
+   * This capability is not part of the spec yet, and may be removed or changed at any point.
+   *
+   * Initial model state if supported by the Agent
+   */
+  models?: SessionModelState | null;
+  /**
    * Initial mode state if supported by the Agent
    *
    * See protocol docs: [Session Modes](https://agentclientprotocol.com/protocol/session-modes)
@@ -1297,6 +1331,56 @@ export interface NewSessionResponse {
    * Used in all subsequent requests for this conversation.
    */
   sessionId: string;
+}
+/**
+ * **UNSTABLE**
+ *
+ * This capability is not part of the spec yet, and may be removed or changed at any point.
+ *
+ * The set of models and the one currently active.
+ */
+export interface SessionModelState {
+  /**
+   * Extension point for implementations
+   */
+  _meta?: {
+    [k: string]: unknown;
+  };
+  /**
+   * The set of models that the Agent can use
+   */
+  availableModels: ModelInfo[];
+  /**
+   * The current model the Agent is in.
+   */
+  currentModelId: string;
+}
+/**
+ * **UNSTABLE**
+ *
+ * This capability is not part of the spec yet, and may be removed or changed at any point.
+ *
+ * Information about a selectable model.
+ */
+export interface ModelInfo {
+  /**
+   * Extension point for implementations
+   */
+  _meta?: {
+    [k: string]: unknown;
+  };
+  /**
+   * Optional description of the model.
+   */
+  description?: string | null;
+  /**
+   * Unique identifier for the model.
+   */
+  modelId: string;
+  /**
+   * Human-readable name of the model.
+   */
+  name: string;
 }
 /**
  * The set of modes and the one currently active.
@@ -1344,6 +1428,14 @@ export interface LoadSessionResponse {
     [k: string]: unknown;
   };
   /**
+   * **UNSTABLE**
+   *
+   * This capability is not part of the spec yet, and may be removed or changed at any point.
+   *
+   * Initial model state if supported by the Agent
+   */
+  models?: SessionModelState | null;
+  /**
    * Initial mode state if supported by the Agent
    *
    * See protocol docs: [Session Modes](https://agentclientprotocol.com/protocol/session-modes)
@@ -1377,6 +1469,21 @@ export interface PromptResponse {
     | "max_turn_requests"
     | "refusal"
     | "cancelled";
+}
+/**
+ * **UNSTABLE**
+ *
+ * This capability is not part of the spec yet, and may be removed or changed at any point.
+ *
+ * Response to `session/set_model` method.
+ */
+export interface SetSessionModelResponse {
+  /**
+   * Extension point for implementations
+   */
+  _meta?: {
+    [k: string]: unknown;
+  };
 }
 export interface ExtMethodResponse1 {
   [k: string]: unknown;
@@ -1589,7 +1696,7 @@ export interface AvailableCommand {
    */
   input?: AvailableCommandInput | null;
   /**
-   * Command name (e.g., "create_plan", "research_codebase").
+   * Command name (e.g., `create_plan`, `research_codebase`).
    */
   name: string;
 }
@@ -1769,6 +1876,13 @@ export const setSessionModeRequestSchema = z.object({
 });
 
 /** @internal */
+export const setSessionModelRequestSchema = z.object({
+  _meta: z.record(z.unknown()).optional(),
+  modelId: z.string(),
+  sessionId: z.string(),
+});
+
+/** @internal */
 export const extMethodRequest1Schema = z.record(z.unknown());
 
 /** @internal */
@@ -1812,6 +1926,11 @@ export const promptResponseSchema = z.object({
     z.literal("refusal"),
     z.literal("cancelled"),
   ]),
+});
+
+/** @internal */
+export const setSessionModelResponseSchema = z.object({
+  _meta: z.record(z.unknown()).optional(),
 });
 
 /** @internal */
@@ -2018,11 +2137,26 @@ export const promptCapabilitiesSchema = z.object({
 });
 
 /** @internal */
+export const modelInfoSchema = z.object({
+  _meta: z.record(z.unknown()).optional(),
+  description: z.string().optional().nullable(),
+  modelId: z.string(),
+  name: z.string(),
+});
+
+/** @internal */
 export const sessionModeSchema = z.object({
   _meta: z.record(z.unknown()).optional(),
   description: z.string().optional().nullable(),
   id: sessionModeIdSchema,
   name: z.string(),
+});
+
+/** @internal */
+export const sessionModelStateSchema = z.object({
+  _meta: z.record(z.unknown()).optional(),
+  availableModels: z.array(modelInfoSchema),
+  currentModelId: z.string(),
 });
 
 /** @internal */
@@ -2097,6 +2231,7 @@ export const promptRequestSchema = z.object({
 /** @internal */
 export const newSessionResponseSchema = z.object({
   _meta: z.record(z.unknown()).optional(),
+  models: sessionModelStateSchema.optional().nullable(),
   modes: sessionModeStateSchema.optional().nullable(),
   sessionId: z.string(),
 });
@@ -2104,6 +2239,7 @@ export const newSessionResponseSchema = z.object({
 /** @internal */
 export const loadSessionResponseSchema = z.object({
   _meta: z.record(z.unknown()).optional(),
+  models: sessionModelStateSchema.optional().nullable(),
   modes: sessionModeStateSchema.optional().nullable(),
 });
 
@@ -2277,6 +2413,7 @@ export const agentRequestSchema = z.union([
   loadSessionRequestSchema,
   setSessionModeRequestSchema,
   promptRequestSchema,
+  setSessionModelRequestSchema,
   extMethodRequest1Schema,
 ]);
 
@@ -2288,6 +2425,7 @@ export const agentResponseSchema = z.union([
   loadSessionResponseSchema,
   setSessionModeResponseSchema,
   promptResponseSchema,
+  setSessionModelResponseSchema,
   extMethodResponse1Schema,
 ]);
 
