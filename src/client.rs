@@ -330,6 +330,18 @@ impl Cost {
 pub struct ContentChunk {
     /// A single item of content
     pub content: ContentBlock,
+    /// **UNSTABLE**
+    ///
+    /// This capability is not part of the spec yet, and may be removed or changed at any point.
+    ///
+    /// A unique identifier for the message this chunk belongs to.
+    ///
+    /// All chunks belonging to the same message share the same `messageId`.
+    /// A change in `messageId` indicates a new message has started.
+    /// Both clients and agents MUST use UUID format for message IDs.
+    #[cfg(feature = "unstable_message_id")]
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub message_id: Option<String>,
     /// The _meta property is reserved by ACP to allow clients and agents to attach additional
     /// metadata to their interactions. Implementations MUST NOT make assumptions about values at
     /// these keys.
@@ -344,8 +356,26 @@ impl ContentChunk {
     pub fn new(content: ContentBlock) -> Self {
         Self {
             content,
+            #[cfg(feature = "unstable_message_id")]
+            message_id: None,
             meta: None,
         }
+    }
+
+    /// **UNSTABLE**
+    ///
+    /// This capability is not part of the spec yet, and may be removed or changed at any point.
+    ///
+    /// A unique identifier for the message this chunk belongs to.
+    ///
+    /// All chunks belonging to the same message share the same `messageId`.
+    /// A change in `messageId` indicates a new message has started.
+    /// Both clients and agents MUST use UUID format for message IDs.
+    #[cfg(feature = "unstable_message_id")]
+    #[must_use]
+    pub fn message_id(mut self, message_id: impl IntoOption<String>) -> Self {
+        self.message_id = message_id.into_option();
+        self
     }
 
     /// The _meta property is reserved by ACP to allow clients and agents to attach additional

@@ -436,6 +436,8 @@ fn test_notification_wire_format() {
                             text: "Hello".to_string(),
                             meta: None,
                         }),
+                        #[cfg(feature = "unstable_message_id")]
+                        message_id: None,
                         meta: None,
                     }),
                     meta: None,
